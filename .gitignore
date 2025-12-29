@@ -1,0 +1,36 @@
+node_modules/
+vendor/
+
+
+.env
+.env.*
+!.env.example
+
+
+.idea/
+.vscode/
+*.iml
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# === Build / Dist ===
+dist/
+build/
+.terraform/
+
+# === Logs ===
+logs/
+*.log
+
+# === OS-specific ===
+.DS_Store
+Thumbs.db
+
+# === Temporary ===
+*.tmp
+*.temp
+*.swp

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вхід в чат</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="login-container">
+        <h1>Корпоративний чат</h1>
+        <input type="text" id="userName" placeholder="Введіть ваше ім'я">
+        <button id="loginBtn">Увійти</button>
+        <div class="error" id="error"></div>
+    </div>
+
+    <script>
+        function doLogin() {
+            const name = document.getElementById('userName').value.trim();
+            const error = document.getElementById('error');
+
+            if (!name) {
+                error.textContent = 'Будь ласка, введіть імя';
+                return;
+            }
+
+            fetch('/api/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name: name })
+            }).then(r => r.json())
+              .then(data => {
+                  if (data.status === 'ok') {
+                      window.location.href = '/';
+                  } else {
+                      error.textContent = data.error || 'Помилка входу';
+                  }
+              });
+        }
+
+        document.getElementById('loginBtn').addEventListener('click', doLogin);
+        document.getElementById('userName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                doLogin();
+            }
+        });
+    </script>
+</body>
+</html>

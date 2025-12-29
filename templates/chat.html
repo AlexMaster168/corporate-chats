@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Корпоративний чат</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>Корпоративний чат</h2>
+                <div class="user-status">
+                    <span class="online-indicator"></span>
+                    <span id="currentUser">{{ user_name }}</span>
+                </div>
+            </div>
+            <div class="tabs">
+                <div class="tab" onclick="showTab('users')">Користувачі</div>
+                <div class="tab active" onclick="showTab('groups')">Групи</div>
+            </div>
+            <div class="user-list" id="userList" hx-get="/api/groups" hx-trigger="load, every 5s" hx-swap="innerHTML">
+                Завантаження...
+            </div>
+        </div>
+
+        <div class="chat-area">
+            <div class="chat-header">
+                <div class="chat-title" id="chatTitle">Загальний чат</div>
+                <div class="chat-actions">
+                    <button onclick="showGroupModal()">Створити групу</button>
+                    <button onclick="refreshMessages()">🔄 Оновити</button>
+                </div>
+            </div>
+
+            <div class="messages" id="messages">
+                <p style="text-align: center; color: #999; margin-top: 50px;">
+                    Завантаження повідомлень...
+                </p>
+            </div>
+
+            <div class="input-area">
+                <label class="file-upload" for="fileInput" title="Прикріпити файл">📎</label>
+                <input type="file" id="fileInput">
+
+                <button class="voice-btn" id="voiceBtn" title="Голосове повідомлення">🎤</button>
+
+                <input type="text" id="messageInput" placeholder="Введіть повідомлення...">
+                <button id="sendBtn">Відправити</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="groupModal">
+        <div class="modal-content">
+            <h3>Створити нову групу</h3>
+            <input type="text" id="groupName" placeholder="Назва групи">
+            <select id="groupMembers" multiple size="5">
+            </select>
+            <small>Утримуйте Ctrl для вибору декількох користувачів</small>
+            <div class="modal-actions">
+                <button class="btn-primary" id="createGroupBtn">Створити</button>
+                <button class="btn-secondary" onclick="hideGroupModal()">Скасувати</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="progress-modal" id="progressModal">
+        <div class="progress-content">
+            <h3>Завантаження файлу...</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">0%</div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
