@@ -2,48 +2,86 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вхід в чат</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Вхід</title>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+<div class="login-wrapper">
     <div class="login-container">
-        <h1>Корпоративний чат</h1>
-        <input type="text" id="userName" placeholder="Введіть ваше ім'я">
-        <button id="loginBtn">Увійти</button>
-        <div class="error" id="error"></div>
+        <h1>Corporate Chat</h1>
+        <div id="login-form">
+            <input type="text" id="username" placeholder="Нікнейм" autocomplete="off">
+            <input type="password" id="password" placeholder="Пароль">
+            <button onclick="handleLogin()">Увійти</button>
+            <p style="margin-top:1.5rem; font-size:0.9rem; cursor:pointer; color:var(--primary-color); font-weight:500;"
+               onclick="toggleAuth()">Немає акаунту? Реєстрація</p>
+        </div>
+
+        <div id="register-form" style="display:none">
+            <input type="text" id="reg-username" placeholder="Нікнейм (унікальний)" autocomplete="off">
+            <input type="text" id="reg-realname" placeholder="Реальне ім'я" autocomplete="off">
+            <div style="display:flex; gap:10px;">
+                <input type="date" id="reg-birthdate" style="flex:1;">
+                <select id="reg-gender" style="flex:1;">
+                    <option value="male">Чоловік</option>
+                    <option value="female">Жінка</option>
+                </select>
+            </div>
+            <input type="password" id="reg-password" placeholder="Пароль">
+            <button onclick="handleRegister()" style="background:var(--success-color)">Зареєструватися</button>
+            <p style="margin-top:1.5rem; font-size:0.9rem; cursor:pointer; color:var(--primary-color); font-weight:500;"
+               onclick="toggleAuth()">Вже є акаунт? Вхід</p>
+        </div>
+        <p id="error" class="error"
+           style="color:var(--danger-color); margin-top:1rem; font-size:0.9rem; font-weight:500;"></p>
     </div>
+</div>
 
-    <script>
-        function doLogin() {
-            const name = document.getElementById('userName').value.trim();
-            const error = document.getElementById('error');
+<script type="module">
+    import { login, register, saveSession } from '/static/js/api.js';
 
-            if (!name) {
-                error.textContent = 'Будь ласка, введіть імя';
-                return;
-            }
-
-            fetch('/api/login', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name: name })
-            }).then(r => r.json())
-              .then(data => {
-                  if (data.status === 'ok') {
-                      window.location.href = '/';
-                  } else {
-                      error.textContent = data.error || 'Помилка входу';
-                  }
-              });
+    window.toggleAuth = function() {
+        const loginEl = document.getElementById('login-form');
+        const regEl = document.getElementById('register-form');
+        if (loginEl.style.display === 'none') {
+            loginEl.style.display = 'block'; regEl.style.display = 'none';
+        } else {
+            loginEl.style.display = 'none'; regEl.style.display = 'block';
         }
+        document.getElementById('error').innerText = '';
+    }
 
-        document.getElementById('loginBtn').addEventListener('click', doLogin);
-        document.getElementById('userName').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                doLogin();
-            }
-        });
-    </script>
+    window.handleLogin = async function() {
+        const name = document.getElementById('username').value;
+        const pass = document.getElementById('password').value;
+        if(!name || !pass) return;
+
+        const data = await login(name, pass);
+        if(data.access_token) {
+            saveSession(data);
+            window.location.href = '/chat';
+        } else {
+            document.getElementById('error').innerText = data.error || 'Помилка входу';
+        }
+    }
+
+    window.handleRegister = async function() {
+        const name = document.getElementById('reg-username').value;
+        const realName = document.getElementById('reg-realname').value;
+        const birthDate = document.getElementById('reg-birthdate').value;
+        const gender = document.getElementById('reg-gender').value;
+        const pass = document.getElementById('reg-password').value;
+
+        if(!name || !pass || !realName) return;
+
+        const data = await register({name, real_name: realName, birth_date: birthDate, gender, password: pass});
+        if(data.access_token) {
+            saveSession(data);
+            window.location.href = '/chat';
+        } else {
+            document.getElementById('error').innerText = data.error || 'Помилка реєстрації';
+        }
+    }
+</script>
 </body>
 </html>
