@@ -24,7 +24,7 @@ export async function fetchWithAuth(url, options = {}) {
             options.headers['Authorization'] = `Bearer ${accessToken}`;
             response = await fetch(url, options);
         } else {
-            window.location.href = '/';
+            logout();
         }
     }
     return response;
@@ -55,4 +55,9 @@ export function saveSession(data) {
     sessionStorage.setItem('refresh_token', data.refresh_token);
     sessionStorage.setItem('user_id', data.user_id);
     sessionStorage.setItem('user_name', data.name);
+}
+
+export function logout() {
+    sessionStorage.clear();
+    window.location.href = '/';
 }

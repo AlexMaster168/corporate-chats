@@ -25,6 +25,9 @@ build/
 # === Logs ===
 logs/
 *.log
+chat.db
+chat.db-wal
+chat.db-shm
 
 # === OS-specific ===
 .DS_Store

@@ -5,13 +5,14 @@ DB_NAME = 'chat.db'
 
 
 def get_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=30.0)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
     conn = get_db()
+    conn.execute("PRAGMA journal_mode=WAL;")
     c = conn.cursor()
 
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -49,6 +50,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS participants (
         room_id TEXT,
         user_id TEXT,
+        role TEXT DEFAULT 'member',
         joined_at TEXT,
         PRIMARY KEY (room_id, user_id),
         FOREIGN KEY(room_id) REFERENCES rooms(id),
@@ -59,7 +61,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         room_id TEXT NOT NULL,
         sender_id TEXT NOT NULL,
-        type TEXT CHECK(type IN ('text', 'file', 'voice', 'system')),
+        type TEXT CHECK(type IN ('text', 'file', 'voice', 'video', 'system')),
         content TEXT,
         filename TEXT,
         created_at TEXT,

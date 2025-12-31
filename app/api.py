@@ -25,9 +25,6 @@ def log_group_action(room_id, action, details):
 def register():
     data = request.json
     name = data.get('name')
-    real_name = data.get('real_name')
-    birth_date = data.get('birth_date')
-    gender = data.get('gender')
     password = data.get('password')
 
     if not name or not password:
@@ -41,13 +38,11 @@ def register():
         pw_hash = generate_password_hash(password)
         timestamp = datetime.now().isoformat()
 
-        c.execute('''INSERT INTO users 
-                     (id, name, real_name, birth_date, gender, password_hash, created_at) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                  (user_id, name, real_name, birth_date, gender, pw_hash, timestamp))
+        c.execute("INSERT INTO users (id, name, password_hash, created_at) VALUES (?, ?, ?, ?)",
+                  (user_id, name, pw_hash, timestamp))
 
-        c.execute("INSERT INTO participants (room_id, user_id, joined_at) VALUES (?, ?, ?)",
-                  ('general', user_id, timestamp))
+        c.execute("INSERT INTO participants (room_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)",
+                  ('general', user_id, 'member', timestamp))
         conn.commit()
 
         access_token = create_access_token(identity=user_id)
@@ -58,8 +53,7 @@ def register():
             'name': name,
             'avatar': None,
             'is_online': True,
-            'last_active': timestamp,
-            'gender': gender
+            'last_active': timestamp
         })
 
         return jsonify({
@@ -163,7 +157,10 @@ def upload_avatar_gallery():
         c.execute("SELECT avatars_gallery FROM users WHERE id = ?", (user_id,))
         row = c.fetchone()
         gallery = json.loads(row['avatars_gallery']) if row['avatars_gallery'] else []
-        gallery.insert(0, file_content)
+
+        if file_content not in gallery:
+            gallery.insert(0, file_content)
+
         c.execute("UPDATE users SET avatars_gallery = ?, avatar = ? WHERE id = ?",
                   (json.dumps(gallery), file_content, user_id))
         conn.commit()
@@ -222,14 +219,20 @@ def get_group_logs():
     room_id = request.json.get('room_id')
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT created_by, created_at FROM rooms WHERE id = ?", (room_id,))
-    room = c.fetchone()
-    if not room or room['created_by'] != user_id:
+
+    c.execute("SELECT role FROM participants WHERE room_id = ? AND user_id = ?", (room_id, user_id))
+    participant = c.fetchone()
+
+    if not participant or participant['role'] not in ('owner', 'admin'):
         conn.close()
         return jsonify({'error': 'Unauthorized'}), 403
+
+    c.execute("SELECT created_by, created_at FROM rooms WHERE id = ?", (room_id,))
+    room = c.fetchone()
+
     c.execute("SELECT * FROM group_logs WHERE room_id = ? ORDER BY timestamp DESC LIMIT 100", (room_id,))
     logs = [dict(row) for row in c.fetchall()]
-    info = {'created_at': room['created_at'], 'created_by': user_id}
+    info = {'created_at': room['created_at'], 'created_by': room['created_by']}
     conn.close()
     return jsonify({'status': 'ok', 'logs': logs, 'info': info})
 
@@ -243,11 +246,17 @@ def update_group():
     avatar_data = request.json.get('image')
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT created_by, name FROM rooms WHERE id = ?", (room_id,))
+
+    c.execute("SELECT role FROM participants WHERE room_id = ? AND user_id = ?", (room_id, user_id))
+    participant = c.fetchone()
+
+    c.execute("SELECT name FROM rooms WHERE id = ?", (room_id,))
     room = c.fetchone()
-    if not room or room['created_by'] != user_id:
+
+    if not participant or participant['role'] not in ('owner', 'admin'):
         conn.close()
         return jsonify({'error': 'Unauthorized'}), 403
+
     updates = []
     params = []
     log_details = []
@@ -306,6 +315,8 @@ def delete_chat():
             c.execute("UPDATE rooms SET deleted_for = ? WHERE id = ?", (json.dumps(deleted_for), room_id))
             conn.commit()
 
+        socketio.emit('chat_deleted', {'id': room_id, 'mutual': False}, to=request.sid)
+
     conn.close()
     return jsonify({'status': 'ok'})
 
@@ -318,15 +329,33 @@ def manage_participants():
     action = data.get('action')
     room_id = data.get('room_id')
     target_id = data.get('target_id')
+
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT created_by FROM rooms WHERE id = ?", (room_id,))
-    room = c.fetchone()
 
-    if action == 'add' or action == 'remove':
-        if not room or room['created_by'] != user_id:
+    c.execute("SELECT role FROM participants WHERE room_id = ? AND user_id = ?", (room_id, user_id))
+    requester = c.fetchone()
+    requester_role = requester['role'] if requester else None
+
+    if not requester_role:
+        conn.close()
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    if action in ('add', 'remove'):
+        if requester_role not in ('owner', 'admin'):
             conn.close()
             return jsonify({'error': 'Unauthorized'}), 403
+
+        if action == 'remove':
+            c.execute("SELECT role FROM participants WHERE room_id = ? AND user_id = ?", (room_id, target_id))
+            target = c.fetchone()
+            if target:
+                if target['role'] == 'owner':
+                    conn.close()
+                    return jsonify({'error': 'Cannot remove owner'}), 403
+                if target['role'] == 'admin' and requester_role != 'owner':
+                    conn.close()
+                    return jsonify({'error': 'Admins cannot remove other admins'}), 403
 
     c.execute("SELECT name FROM users WHERE id = ?", (target_id,))
     target_user = c.fetchone()
@@ -334,22 +363,31 @@ def manage_participants():
 
     if action == 'add':
         try:
-            c.execute("INSERT INTO participants (room_id, user_id, joined_at) VALUES (?, ?, ?)",
-                      (room_id, target_id, datetime.now().isoformat()))
+            c.execute("INSERT INTO participants (room_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)",
+                      (room_id, target_id, 'member', datetime.now().isoformat()))
             conn.commit()
             c.execute("SELECT name, avatar FROM users WHERE id = ?", (target_id,))
             u = c.fetchone()
             log_group_action(room_id, "Додавання учасника", f"Додано {target_name}")
             socketio.emit('participant_added',
-                          {'room_id': room_id, 'user': {'id': target_id, 'name': u['name'], 'avatar': u['avatar']}})
+                          {'room_id': room_id,
+                           'user': {'id': target_id, 'name': u['name'], 'avatar': u['avatar'], 'role': 'member'}})
         except:
             pass
+
     elif action == 'remove':
         c.execute("DELETE FROM participants WHERE room_id = ? AND user_id = ?", (room_id, target_id))
         conn.commit()
         log_group_action(room_id, "Видалення учасника", f"Видалено {target_name}")
         socketio.emit('participant_removed', {'room_id': room_id, 'user_id': target_id})
+
     elif action == 'leave':
+        if requester_role == 'owner':
+            c.execute("SELECT COUNT(*) as count FROM participants WHERE room_id = ?", (room_id,))
+            if c.fetchone()['count'] > 1:
+                conn.close()
+                return jsonify({'error': 'Owner cannot leave without deleting or transferring ownership'}), 400
+
         c.execute("DELETE FROM participants WHERE room_id = ? AND user_id = ?", (room_id, user_id))
         conn.commit()
         c.execute("SELECT name FROM users WHERE id = ?", (user_id,))

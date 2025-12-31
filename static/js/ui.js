@@ -1,7 +1,17 @@
 import { decrypt, formatDate, encrypt } from './utils.js';
 import { getMyId } from './api.js';
 
-export const EMOJIS = ['😊','😂','😃','😍','😢','😡','👍','👎','🎉','🔥','❤️','👀','🤔','🤷','👋','💀', '🤡', '💩', '🥳', '🤯', '🥶', '🫡', '🙏', '🤝', '🙌', '👏', '💋', '🌹', '💔', '💩'];
+export const EMOJIS = [
+    '👍','👎','❤️','🔥','🎉','😂','😮','😢','😡','🤔','👀','🤝','🙏','🤡','💩','👻','💀','👽','👾','🤖',
+    '🎃','😺','😸','😹','😻','😼','😽','🙀','😿','😾','👋','🤚','🖐','✋','🖖','👌','✌️','🤞','🤟',
+    '🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏',
+    '✍️','💅','🤳','💪','🦵','🦶','👣','👂','👃','🧠','🦷','🦴','👀','👁','👅',
+    '👄','💋','👶','👧','🧒','👦','👩','🧑','👨','👩‍🦱','🧑‍🦱','👨‍🦱','👩‍🦰','🧑‍🦰','👨‍🦰','👱‍♀️','👱','👱‍♂️',
+    '👩‍🦳','🧑‍🦳','👨‍🦳','👩‍🦲','🧑‍🦲','👨‍🦲','🧔','👵','🧓','👴','👲','👳‍♀️','👳','👳‍♂️','🧕','👮‍♀️','👮','👮‍♂️','👷‍♀️',
+    '👷','👷‍♂️','💂‍♀️','💂','💂‍♂️','🕵️‍♀️','🕵️','🕵️‍♂️','👩‍⚕️','🧑‍⚕️','👨‍⚕️','👩‍🌾','🧑‍🌾','👨‍🌾','👩‍🍳','🧑‍🍳','👨‍🍳','👩‍🎓',
+    '🧑‍🎓','👨‍🎓','👩‍🎤','🧑‍🎤','👨‍🎤','👩‍🏫','🧑‍🏫','👨‍🏫','👩‍🏭','🧑‍🏭','👨‍🏭','👩‍💻','🧑‍💻','👨‍💻','👩‍💼','🧑‍💼','👨‍💼'
+];
+
 let editingMessageId = null;
 
 export function closeModal(modalId) {
@@ -34,6 +44,7 @@ export function renderUserList(users, onUserClick) {
     users.forEach(user => {
         const div = document.createElement('div');
         div.className = 'list-item';
+        div.onclick = () => onUserClick(user);
 
         let statusText = '';
         let color = '#999';
@@ -58,7 +69,6 @@ export function renderUserList(users, onUserClick) {
                 <span style="color:${color}; font-size:11px;">${statusText}</span>
             </div>
         `;
-        div.onclick = () => onUserClick(user);
         container.appendChild(div);
     });
 }
@@ -115,6 +125,8 @@ export function appendMessage(msg, socket) {
         }
     } else if (msg.type === 'voice') {
         contentHtml = `<audio controls src="${msg.content}"></audio>`;
+    } else if (msg.type === 'video') {
+        contentHtml = `<video src="${msg.content}" controls class="video-msg"></video>`;
     }
 
     let avatarHtml = '';
@@ -149,7 +161,7 @@ export function appendMessage(msg, socket) {
         <div class="msg-meta">${timeHtml}</div>
     `;
 
-    if(msg.reactions) renderReactions(div, msg.reactions);
+    if(msg.reactions) renderReactions(div, msg.reactions, socket, msg.room_id);
 
     div.querySelector('.react-btn').onclick = () => {
         showReactionPicker(socket, msg.id, msg.room_id, div);
@@ -191,6 +203,9 @@ function showReactionPicker(socket, msgId, roomId, messageDiv) {
     picker.style.gap = '5px';
     picker.style.zIndex = '100';
     picker.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+    picker.style.width = '300px';
+    picker.style.maxHeight = '200px';
+    picker.style.overflowY = 'auto';
 
     EMOJIS.forEach(emoji => {
         const btn = document.createElement('button');
@@ -218,18 +233,38 @@ function showReactionPicker(socket, msgId, roomId, messageDiv) {
     }, 100);
 }
 
-export function updateMessageReactions(id, reactions) {
+export function updateMessageReactions(id, reactions, socket, roomId) {
     const div = document.querySelector(`.message[data-id="${id}"]`);
-    if(div) renderReactions(div, reactions);
+    if(div) renderReactions(div, reactions, socket, roomId);
 }
 
-function renderReactions(div, reactions) {
+function renderReactions(div, reactions, socket, roomId) {
     const list = div.querySelector('.reactions-list');
     list.innerHTML = '';
-    for(const [uid, emoji] of Object.entries(reactions)) {
-        const pill = document.createElement('span');
+    const myId = getMyId();
+
+    for(const [uid, data] of Object.entries(reactions)) {
+        const pill = document.createElement('div');
         pill.className = 'reaction-pill';
-        pill.innerText = emoji;
+
+        let avatarStyle = data.avatar ? `background-image:url(data:image/png;base64,${data.avatar})` : 'background-color:#ccc';
+
+        pill.innerHTML = `
+            <div class="reaction-avatar" style="${avatarStyle}" title="${data.name}"></div>
+            <span>${data.reaction}</span>
+        `;
+
+        if (uid === myId) {
+            pill.style.cursor = 'pointer';
+            pill.style.borderColor = 'var(--primary-color)';
+            pill.title = 'Натисніть, щоб видалити';
+            pill.onclick = () => {
+                if(confirm('Видалити вашу реакцію?')) {
+                    socket.emit('remove_reaction', { id: div.dataset.id, room_id: roomId, token: sessionStorage.getItem('access_token') });
+                }
+            };
+        }
+
         list.appendChild(pill);
     }
 }
@@ -283,21 +318,52 @@ export function removeMessageFromDOM(id) {
     if (div) div.remove();
 }
 
-export function renderParticipants(participants, myId, onRemove) {
+export function renderParticipants(participants, myId, myRole, onRemove, onPromote, onDemote) {
     const list = document.getElementById('group-participants-list');
-    list.innerHTML = participants.map(p => `
+
+    list.innerHTML = participants.map(p => {
+        let actions = '';
+        if (myId !== p.id) {
+            if (myRole === 'owner' || (myRole === 'admin' && p.role === 'member')) {
+                actions += `<span class="remove-btn" data-uid="${p.id}" title="Видалити">✖</span>`;
+            }
+            if (myRole === 'owner') {
+                if (p.role === 'member') {
+                    actions += `<span class="promote-btn" data-uid="${p.id}" style="cursor:pointer; color:var(--success-color); font-weight:bold; margin-left:10px;" title="Зробити адміном">↑</span>`;
+                } else if (p.role === 'admin') {
+                    actions += `<span class="demote-btn" data-uid="${p.id}" style="cursor:pointer; color:var(--text-secondary); font-weight:bold; margin-left:10px;" title="Забрати адмінку">↓</span>`;
+                }
+            }
+        }
+
+        let roleLabel = '';
+        if(p.role === 'owner') roleLabel = '<span style="font-size:10px; background:gold; padding:2px 5px; border-radius:4px; margin-left:5px;">Власник</span>';
+        else if(p.role === 'admin') roleLabel = '<span style="font-size:10px; background:#e0e7ff; color:var(--primary-color); padding:2px 5px; border-radius:4px; margin-left:5px;">Адмін</span>';
+
+        return `
         <div class="participant-row">
             <div style="display:flex; align-items:center; gap:10px;">
                 <div class="avatar" style="width:30px; height:30px; ${p.avatar ? `background-image:url(data:image/png;base64,${p.avatar})` : ''}"></div>
-                <span>${p.name}</span>
+                <span>${p.name} ${roleLabel}</span>
             </div>
-            ${onRemove && p.id !== myId ? `<span class="remove-btn" data-uid="${p.id}">✖</span>` : ''}
+            <div>${actions}</div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     if (onRemove) {
         list.querySelectorAll('.remove-btn').forEach(btn => {
             btn.onclick = () => onRemove(btn.dataset.uid);
+        });
+    }
+    if (onPromote) {
+        list.querySelectorAll('.promote-btn').forEach(btn => {
+            btn.onclick = () => onPromote(btn.dataset.uid);
+        });
+    }
+    if (onDemote) {
+        list.querySelectorAll('.demote-btn').forEach(btn => {
+            btn.onclick = () => onDemote(btn.dataset.uid);
         });
     }
 }

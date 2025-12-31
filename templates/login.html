@@ -19,14 +19,6 @@
 
         <div id="register-form" style="display:none">
             <input type="text" id="reg-username" placeholder="Нікнейм (унікальний)" autocomplete="off">
-            <input type="text" id="reg-realname" placeholder="Реальне ім'я" autocomplete="off">
-            <div style="display:flex; gap:10px;">
-                <input type="date" id="reg-birthdate" style="flex:1;">
-                <select id="reg-gender" style="flex:1;">
-                    <option value="male">Чоловік</option>
-                    <option value="female">Жінка</option>
-                </select>
-            </div>
             <input type="password" id="reg-password" placeholder="Пароль">
             <button onclick="handleRegister()" style="background:var(--success-color)">Зареєструватися</button>
             <p style="margin-top:1.5rem; font-size:0.9rem; cursor:pointer; color:var(--primary-color); font-weight:500;"
@@ -67,14 +59,11 @@
 
     window.handleRegister = async function() {
         const name = document.getElementById('reg-username').value;
-        const realName = document.getElementById('reg-realname').value;
-        const birthDate = document.getElementById('reg-birthdate').value;
-        const gender = document.getElementById('reg-gender').value;
         const pass = document.getElementById('reg-password').value;
 
-        if(!name || !pass || !realName) return;
+        if(!name || !pass) return;
 
-        const data = await register({name, real_name: realName, birth_date: birthDate, gender, password: pass});
+        const data = await register({name, password: pass});
         if(data.access_token) {
             saveSession(data);
             window.location.href = '/chat';

@@ -1,4 +1,4 @@
-import { fetchWithAuth, getAccessToken, getMyId, getMyName } from './api.js';
+import { fetchWithAuth, getAccessToken, getMyId, getMyName, logout } from './api.js';
 import { decrypt } from './utils.js';
 import { initSocket } from './socket.js';
 import * as UI from './ui.js';
@@ -15,6 +15,9 @@ if (Notification.permission !== "granted") {
 }
 
 const socket = initSocket();
+// Делаем сокет глобально доступным для модулей, которые используют window.socket
+window.socket = socket;
+
 let currentTab = 'groups';
 let cachedUsers = [];
 let cachedProfile = { bio: '', avatars_gallery: [], avatar: null, blocked_users: [], real_name: '', birth_date: '', gender: 'male' };
@@ -64,6 +67,27 @@ socket.on('user_status', (data) => {
     }
 });
 
+socket.on('profile_updated', (data) => {
+    const idx = cachedUsers.findIndex(u => u.id === data.user_id);
+    if (idx !== -1) {
+        cachedUsers[idx] = { ...cachedUsers[idx], ...data.user_data };
+    }
+
+    if (data.user_id === getMyId()) {
+        cachedProfile = { ...cachedProfile, ...data.user_data };
+        updateMyAvatar();
+    }
+
+    renderList();
+
+    if(document.getElementById('user-info-modal').classList.contains('active')) {
+        const nameEl = document.getElementById('user-info-name');
+        if(nameEl.innerText === data.user_data.name) {
+             onUserClick(data.user_data);
+        }
+    }
+});
+
 socket.on('user_updated', (data) => {
     const user = cachedUsers.find(u => u.id === data.id);
     if(user) {
@@ -87,13 +111,37 @@ socket.on('group_updated', (data) => {
     }
     renderList();
     if(Groups.getCurrentRoom() === data.id) {
-        document.getElementById('room-name').innerText = data.name;
+        if(data.name) document.getElementById('room-name').innerText = data.name;
         if(data.avatar) {
              const av = document.getElementById('current-room-avatar');
              av.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
              av.style.display = 'block';
         }
     }
+});
+
+socket.on('group_update', (data) => {
+    const rooms = Groups.getCachedRooms();
+    const room = rooms.find(r => r.id === data.room_id);
+    if(room) {
+        if(data.participants) room.participants = data.participants;
+        if(data.name) room.name = data.name;
+        if(data.avatar) room.avatar = data.avatar;
+    }
+
+    if(Groups.getCurrentRoom() === data.room_id) {
+        if(data.name) document.getElementById('room-name').innerText = data.name;
+        if(data.avatar) {
+             const av = document.getElementById('current-room-avatar');
+             av.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
+             av.style.display = 'block';
+        }
+        if(document.getElementById('group-settings-modal').classList.contains('active')) {
+             // Pass socket here to ensure it's available
+             Groups.openGroupSettings(data.room_id, cachedUsers, socket);
+        }
+    }
+    renderList();
 });
 
 socket.on('chat_deleted', (data) => {
@@ -111,7 +159,25 @@ socket.on('chat_deleted', (data) => {
         document.getElementById('call-btn').style.display = 'none';
         document.getElementById('delete-chat-btn').style.display = 'none';
         UI.closeModal('group-settings-modal');
-        UI.showNotification('Чат видалено', 'Співрозмовник видалив цей чат');
+        UI.showNotification('Чат видалено', 'Цей чат було видалено');
+    }
+});
+
+socket.on('force_leave_room', (data) => {
+    let rooms = Groups.getCachedRooms();
+    rooms = rooms.filter(r => r.id !== data.room_id);
+    Groups.setCachedRooms(rooms);
+    renderList();
+
+    if(Groups.getCurrentRoom() === data.room_id) {
+        Groups.setCurrentRoom(null);
+        document.getElementById('room-name').innerText = 'Оберіть чат';
+        document.getElementById('messages-area').innerHTML = '';
+        document.getElementById('current-room-avatar').style.display = 'none';
+        document.getElementById('group-settings-btn').style.display = 'none';
+        document.getElementById('call-btn').style.display = 'none';
+        document.getElementById('delete-chat-btn').style.display = 'none';
+        UI.closeModal('group-settings-modal');
     }
 });
 
@@ -122,8 +188,8 @@ socket.on('participant_added', (data) => {
         if(!room.participants) room.participants = [];
         room.participants.push(data.user);
     }
-    if(document.getElementById('group-settings-modal').classList.contains('active')) {
-        Groups.openGroupSettings(data.room_id, cachedUsers);
+    if(document.getElementById('group-settings-modal').classList.contains('active') && Groups.getCurrentRoom() === data.room_id) {
+        Groups.openGroupSettings(data.room_id, cachedUsers, socket);
     }
 });
 
@@ -133,8 +199,8 @@ socket.on('participant_removed', (data) => {
     if(room && room.participants) {
         room.participants = room.participants.filter(p => p.id !== data.user_id);
     }
-    if(document.getElementById('group-settings-modal').classList.contains('active')) {
-        Groups.openGroupSettings(data.room_id, cachedUsers);
+    if(document.getElementById('group-settings-modal').classList.contains('active') && Groups.getCurrentRoom() === data.room_id) {
+        Groups.openGroupSettings(data.room_id, cachedUsers, socket);
     }
 });
 
@@ -157,7 +223,7 @@ socket.on('new_message', (msg) => {
 
 socket.on('reaction_added', (data) => {
     if(Groups.getCurrentRoom() === data.room_id) {
-        UI.updateMessageReactions(data.id, data.reactions);
+        UI.updateMessageReactions(data.id, data.reactions, socket, data.room_id);
     }
 });
 
@@ -242,9 +308,9 @@ function onRoomClick(room) {
     }
 
     const isCreator = (room.type === 'group' && room.created_by === getMyId());
-    document.getElementById('group-settings-btn').style.display = isCreator ? 'block' : 'none';
-    document.getElementById('call-btn').style.display = (room.type === 'group') ? 'block' : 'none';
-    document.getElementById('delete-chat-btn').style.display = 'block';
+    document.getElementById('group-settings-btn').style.display = (room.type === 'group') ? 'block' : 'none';
+    document.getElementById('call-btn').style.display = 'block';
+    document.getElementById('delete-chat-btn').style.display = (room.type === 'private') ? 'block' : 'none';
 
     renderList();
     socket.emit('join_chat', {room_id: room.id, token: getAccessToken()});
@@ -343,6 +409,8 @@ window.sendMessage = () => Chat.sendMessage(socket, Groups.getCurrentRoom());
 window.handleFileSelect = Chat.handleFileSelect;
 window.cancelFile = Chat.cancelFile;
 window.startVoice = () => Media.startVoice(socket, Groups.getCurrentRoom());
+window.startVideoMessage = () => Media.startVideoMessage(socket, Groups.getCurrentRoom());
+
 window.switchTab = (tab) => {
     currentTab = tab;
     document.getElementById('tab-groups').classList.toggle('active', tab === 'groups');
@@ -378,7 +446,12 @@ window.handleAvatarUpload = () => Media.handleAvatarUpload((data) => {
     if(data.status === 'ok') {
         cachedProfile.avatars_gallery = data.gallery;
         cachedProfile.avatar = data.avatar;
-        window.openProfileModal();
+
+        const bigAv = document.getElementById('profile-avatar-big');
+        if(bigAv) bigAv.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
+
+        UI.renderProfileGallery(data.gallery, data.avatar, onAvatarSelect, onDeleteAvatar);
+        updateMyAvatar();
     }
 });
 
@@ -388,30 +461,24 @@ window.saveProfile = async () => {
     const birth_date = document.getElementById('profile-birthdate').value;
     const gender = document.getElementById('profile-gender').value;
 
-    await fetchWithAuth('/api/user/profile', {
-        method: 'POST',
-        body: new URLSearchParams({bio, real_name, birth_date, gender})
+    socket.emit('update_profile', {
+        token: getAccessToken(),
+        bio, real_name, birth_date, gender
     });
-
-    cachedProfile.bio = bio;
-    cachedProfile.real_name = real_name;
-    cachedProfile.birth_date = birth_date;
-    cachedProfile.gender = gender;
 
     UI.closeModal('profile-modal');
 };
 
-window.logout = () => {
-    sessionStorage.clear();
-    window.location.href = '/';
-};
-window.openGroupSettings = () => Groups.openGroupSettings(Groups.getCurrentRoom(), cachedUsers);
+window.logout = logout;
+window.openGroupSettings = () => Groups.openGroupSettings(Groups.getCurrentRoom(), cachedUsers, socket);
 window.handleGroupAvatarUpload = () => Groups.handleGroupAvatarUpload(Groups.getCurrentRoom());
-window.updateGroupInfo = () => Groups.updateGroupInfo(Groups.getCurrentRoom());
-window.deleteGroup = () => Groups.deleteGroup(Groups.getCurrentRoom());
-window.leaveGroup = Groups.leaveGroup;
-window.addParticipant = () => Groups.addParticipant(Groups.getCurrentRoom());
-window.removeParticipant = Groups.removeParticipant;
+window.updateGroupInfo = () => Groups.updateGroupInfo(Groups.getCurrentRoom(), socket);
+window.deleteGroup = () => Groups.deleteGroup(Groups.getCurrentRoom(), socket);
+window.leaveGroup = () => Groups.leaveGroup(Groups.getCurrentRoom(), socket);
+window.addParticipant = () => Groups.addParticipant(Groups.getCurrentRoom(), socket);
+window.removeParticipant = (uid) => Groups.removeParticipant(Groups.getCurrentRoom(), uid, socket);
+window.promoteAdmin = (uid) => Groups.promoteAdmin(Groups.getCurrentRoom(), uid, socket);
+window.demoteAdmin = (uid) => Groups.demoteAdmin(Groups.getCurrentRoom(), uid, socket);
 window.showGroupTab = Groups.showGroupTab;
 window.startVideoCall = () => Media.startVideoCall(socket, Groups.getCurrentRoom());
 window.toggleScreenShare = Media.toggleScreenShare;
@@ -419,7 +486,7 @@ window.toggleAudio = Media.toggleAudio;
 window.toggleVideo = Media.toggleVideo;
 window.closeVideoCall = () => Media.closeVideoCall(socket, Groups.getCurrentRoom());
 window.openDeleteChatModal = Groups.openDeleteChatModal;
-window.confirmDeleteChat = Groups.confirmDeleteChat;
+window.confirmDeleteChat = () => Groups.confirmDeleteChat(Groups.getCurrentRoom());
 
 document.getElementById('msg-input').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') window.sendMessage();

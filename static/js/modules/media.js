@@ -5,8 +5,14 @@ let mediaRecorder;
 let myPeer = null;
 let myStream = null;
 let peers = {};
+let videoRecorder;
+let videoPreviewElement = null;
 
 export function startVoice(socket, currentRoom) {
+    if (!currentRoom) {
+        alert('Будь ласка, оберіть чат');
+        return;
+    }
     const btn = document.getElementById('voice-btn');
     if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
@@ -40,6 +46,64 @@ export function startVoice(socket, currentRoom) {
         btn.innerText = '⏹';
         btn.style.color = 'red';
     }).catch(e => alert("Нет доступа к микрофону"));
+}
+
+export function startVideoMessage(socket, currentRoom) {
+    if (!currentRoom) {
+        alert('Будь ласка, оберіть чат');
+        return;
+    }
+    const btn = document.getElementById('video-msg-btn');
+    if (videoRecorder && videoRecorder.state === "recording") {
+        videoRecorder.stop();
+        btn.innerText = '📷';
+        btn.style.color = 'var(--text-secondary)';
+        if(videoPreviewElement) {
+            videoPreviewElement.remove();
+            videoPreviewElement = null;
+        }
+        return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+        videoRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        let chunks = [];
+
+        videoPreviewElement = document.createElement('video');
+        videoPreviewElement.className = 'video-recording-preview';
+        videoPreviewElement.srcObject = stream;
+        videoPreviewElement.autoplay = true;
+        videoPreviewElement.muted = true;
+        document.body.appendChild(videoPreviewElement);
+
+        videoRecorder.addEventListener("dataavailable", event => {
+            if (event.data.size > 0) chunks.push(event.data);
+        });
+
+        videoRecorder.addEventListener("stop", () => {
+            if(videoPreviewElement) {
+                videoPreviewElement.remove();
+                videoPreviewElement = null;
+            }
+            if (chunks.length === 0) return;
+            const blob = new Blob(chunks, { type: 'video/webm' });
+
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                socket.emit('send_message', {
+                    token: getAccessToken(),
+                    room_id: currentRoom,
+                    content: reader.result,
+                    type: 'video'
+                });
+            };
+            stream.getTracks().forEach(track => track.stop());
+        });
+
+        videoRecorder.start(100);
+        btn.innerText = '⏹';
+        btn.style.color = 'red';
+    }).catch(e => alert("Нет доступа к камере или формат video/webm не поддерживается"));
 }
 
 export function handleAvatarUpload(callback) {

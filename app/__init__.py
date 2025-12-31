@@ -4,7 +4,7 @@ from flask_jwt_extended import JWTManager
 from datetime import timedelta
 from .database import init_db
 
-socketio = SocketIO(cors_allowed_origins="*")
+socketio = SocketIO(cors_allowed_origins="*", max_http_buffer_size=500 * 1024 * 1024)
 jwt = JWTManager()
 
 
@@ -15,6 +15,7 @@ def create_app():
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 
+    app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
     jwt.init_app(app)
     socketio.init_app(app)
 
