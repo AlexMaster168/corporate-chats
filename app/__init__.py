@@ -1,21 +1,21 @@
 from flask import Flask, render_template
-from flask_socketio import SocketIO
-from flask_jwt_extended import JWTManager
 from datetime import timedelta
+from dotenv import load_dotenv
+import os
 from .database import init_db
+from .extensions import socketio, jwt
 
-socketio = SocketIO(cors_allowed_origins="*", max_http_buffer_size=500 * 1024 * 1024)
-jwt = JWTManager()
+load_dotenv()
 
 
 def create_app():
     app = Flask(__name__, template_folder='../templates', static_folder='../static')
-    app.config['SECRET_KEY'] = 'super-secret-key-change-in-prod'
-    app.config['JWT_SECRET_KEY'] = 'jwt-secret-key-change-in-prod'
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev_key')
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev_jwt')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
-
     app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+
     jwt.init_app(app)
     socketio.init_app(app)
 

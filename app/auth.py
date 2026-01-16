@@ -2,10 +2,10 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from .database import get_db
-from .events import socketio
+from .extensions import socketio
 from datetime import datetime
 import secrets
-import sqlite3
+import psycopg
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
@@ -20,19 +20,19 @@ def register():
         return jsonify({'error': 'Name and password required'}), 400
 
     conn = get_db()
-    c = conn.cursor()
 
     try:
         user_id = secrets.token_hex(4)
         pw_hash = generate_password_hash(password)
         timestamp = datetime.now().isoformat()
 
-        c.execute("INSERT INTO users (id, name, password_hash, created_at) VALUES (?, ?, ?, ?)",
-                  (user_id, name, pw_hash, timestamp))
+        with conn.cursor() as c:
+            c.execute("INSERT INTO users (id, name, password_hash, created_at) VALUES (%s, %s, %s, %s)",
+                      (user_id, name, pw_hash, timestamp))
 
-        c.execute("INSERT INTO participants (room_id, user_id, joined_at) VALUES (?, ?, ?)",
-                  ('general', user_id, timestamp))
-        conn.commit()
+            c.execute("INSERT INTO participants (room_id, user_id, joined_at) VALUES (%s, %s, %s)",
+                      ('general', user_id, timestamp))
+            conn.commit()
 
         access_token = create_access_token(identity=user_id)
         refresh_token = create_refresh_token(identity=user_id)
@@ -52,7 +52,7 @@ def register():
             'user_id': user_id,
             'name': name
         })
-    except sqlite3.IntegrityError:
+    except psycopg.errors.UniqueViolation:
         return jsonify({'error': 'User already exists'}), 409
     finally:
         conn.close()
@@ -65,9 +65,9 @@ def login():
     password = data.get('password')
 
     conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE name = ?", (name,))
-    user = c.fetchone()
+    with conn.cursor() as c:
+        c.execute("SELECT * FROM users WHERE name = %s", (name,))
+        user = c.fetchone()
     conn.close()
 
     if user and check_password_hash(user['password_hash'], password):

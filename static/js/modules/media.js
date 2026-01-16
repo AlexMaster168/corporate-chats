@@ -1,4 +1,4 @@
-import { fetchWithAuth, getAccessToken } from '../api.js';
+import {fetchWithAuth, getAccessToken} from '../api.js';
 import * as UI from '../ui.js';
 
 let mediaRecorder;
@@ -20,7 +20,7 @@ export function startVoice(socket, currentRoom) {
         btn.style.color = 'var(--text-secondary)';
         return;
     }
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    navigator.mediaDevices.getUserMedia({audio: true}).then(stream => {
         mediaRecorder = new MediaRecorder(stream);
         let audioChunks = [];
         mediaRecorder.addEventListener("dataavailable", event => {
@@ -28,8 +28,8 @@ export function startVoice(socket, currentRoom) {
         });
         mediaRecorder.addEventListener("stop", () => {
             if (audioChunks.length === 0) return;
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            if(audioBlob.size < 1000) return;
+            const audioBlob = new Blob(audioChunks, {type: 'audio/webm'});
+            if (audioBlob.size < 1000) return;
             const reader = new FileReader();
             reader.readAsDataURL(audioBlob);
             reader.onloadend = () => {
@@ -58,14 +58,14 @@ export function startVideoMessage(socket, currentRoom) {
         videoRecorder.stop();
         btn.innerText = '📷';
         btn.style.color = 'var(--text-secondary)';
-        if(videoPreviewElement) {
+        if (videoPreviewElement) {
             videoPreviewElement.remove();
             videoPreviewElement = null;
         }
         return;
     }
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-        videoRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    navigator.mediaDevices.getUserMedia({video: true, audio: true}).then(stream => {
+        videoRecorder = new MediaRecorder(stream, {mimeType: 'video/webm'});
         let chunks = [];
 
         videoPreviewElement = document.createElement('video');
@@ -80,12 +80,12 @@ export function startVideoMessage(socket, currentRoom) {
         });
 
         videoRecorder.addEventListener("stop", () => {
-            if(videoPreviewElement) {
+            if (videoPreviewElement) {
                 videoPreviewElement.remove();
                 videoPreviewElement = null;
             }
             if (chunks.length === 0) return;
-            const blob = new Blob(chunks, { type: 'video/webm' });
+            const blob = new Blob(chunks, {type: 'video/webm'});
 
             const reader = new FileReader();
             reader.readAsDataURL(blob);
@@ -108,7 +108,7 @@ export function startVideoMessage(socket, currentRoom) {
 
 export function handleAvatarUpload(callback) {
     const file = document.getElementById('avatar-input').files[0];
-    if(!file) return;
+    if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -132,7 +132,7 @@ export function startVideoCall(socket, currentRoom) {
     myPeer = new Peer(undefined);
 
     myPeer.on('open', id => {
-        socket.emit('join_video_room', { room_id: currentRoom, peer_id: id });
+        socket.emit('join_video_room', {room_id: currentRoom, peer_id: id});
     });
 
     navigator.mediaDevices.getUserMedia({video: true, audio: true}).then(stream => {
@@ -162,7 +162,7 @@ export function handleUserDisconnect(peerId) {
     if (peers[peerId]) peers[peerId].close();
 }
 
-function addVideoStream(video, stream, muted=false) {
+function addVideoStream(video, stream, muted = false) {
     const grid = document.getElementById('video-grid');
     video.srcObject = stream;
     video.playsInline = true;
@@ -176,37 +176,37 @@ function addVideoStream(video, stream, muted=false) {
 }
 
 export function toggleScreenShare() {
-    navigator.mediaDevices.getDisplayMedia({video:true}).then(stream => {
+    navigator.mediaDevices.getDisplayMedia({video: true}).then(stream => {
         const videoTrack = stream.getVideoTracks()[0];
         const sender = myStream.getVideoTracks()[0];
         myStream.removeTrack(sender);
         myStream.addTrack(videoTrack);
 
-        for(let peerId in peers) {
+        for (let peerId in peers) {
             const pc = peers[peerId].peerConnection;
             const sender = pc.getSenders().find(s => s.track.kind === 'video');
             sender.replaceTrack(videoTrack);
         }
 
         videoTrack.onended = () => {
-             navigator.mediaDevices.getUserMedia({video:true}).then(camStream => {
-                 const camTrack = camStream.getVideoTracks()[0];
-                 myStream.removeTrack(videoTrack);
-                 myStream.addTrack(camTrack);
-                 for(let peerId in peers) {
+            navigator.mediaDevices.getUserMedia({video: true}).then(camStream => {
+                const camTrack = camStream.getVideoTracks()[0];
+                myStream.removeTrack(videoTrack);
+                myStream.addTrack(camTrack);
+                for (let peerId in peers) {
                     const pc = peers[peerId].peerConnection;
                     const sender = pc.getSenders().find(s => s.track.kind === 'video');
                     sender.replaceTrack(camTrack);
-                 }
-             });
+                }
+            });
         };
     });
 }
 
 export function toggleAudio() {
-    if(myStream) {
+    if (myStream) {
         const track = myStream.getAudioTracks()[0];
-        if(track) {
+        if (track) {
             track.enabled = !track.enabled;
             const btn = document.getElementById('toggle-mic-btn');
             btn.style.background = track.enabled ? 'var(--primary-color)' : 'red';
@@ -216,9 +216,9 @@ export function toggleAudio() {
 }
 
 export function toggleVideo() {
-    if(myStream) {
+    if (myStream) {
         const track = myStream.getVideoTracks()[0];
-        if(track) {
+        if (track) {
             track.enabled = !track.enabled;
             const btn = document.getElementById('toggle-cam-btn');
             btn.style.background = track.enabled ? 'var(--primary-color)' : 'red';
@@ -229,9 +229,9 @@ export function toggleVideo() {
 
 export function closeVideoCall(socket, currentRoom) {
     document.getElementById('video-modal').classList.remove('active');
-    if(myStream) myStream.getTracks().forEach(t => t.stop());
-    if(myPeer) {
-        socket.emit('leave_video_room', { room_id: currentRoom, peer_id: myPeer.id });
+    if (myStream) myStream.getTracks().forEach(t => t.stop());
+    if (myPeer) {
+        socket.emit('leave_video_room', {room_id: currentRoom, peer_id: myPeer.id});
         myPeer.destroy();
     }
     document.getElementById('video-grid').innerHTML = '';

@@ -1,68 +1,104 @@
-import { getAccessToken, getMyId } from '../api.js';
-import { encrypt, decrypt } from '../utils.js';
+import {fetchWithAuth, getAccessToken} from '../api.js';
 import * as UI from '../ui.js';
 
-let selectedFile = null;
-
-export function setSelectedFile(file) {
-    selectedFile = file;
-}
-
-export function sendMessage(socket, currentRoom) {
-    if (selectedFile) {
-        uploadFile(currentRoom);
-        return;
-    }
-
-    if (UI.finishEditing(socket, currentRoom)) {
-        return;
-    }
-
-    const input = document.getElementById('msg-input');
-    const text = input.value.trim();
-    if(!text || !currentRoom) return;
-
-    socket.emit('send_message', {
-        token: getAccessToken(),
-        room_id: currentRoom,
-        content: encrypt(text),
-        type: 'text'
-    });
-    input.value = '';
-    document.getElementById('emoji-picker').style.display = 'none';
-}
+let fileToSend = null;
 
 export function handleFileSelect(input) {
-    if (input.files.length) {
-        selectedFile = input.files[0];
+    if (input.files && input.files[0]) {
+        fileToSend = input.files[0];
         document.getElementById('file-preview').style.display = 'block';
-        document.getElementById('file-name').innerText = selectedFile.name;
-        document.getElementById('send-btn').innerText = 'Отправить';
+        document.getElementById('file-name').innerText = fileToSend.name;
     }
 }
 
 export function cancelFile() {
-    selectedFile = null;
+    fileToSend = null;
     document.getElementById('file-input').value = '';
     document.getElementById('file-preview').style.display = 'none';
     document.getElementById('file-caption').value = '';
-    document.getElementById('send-btn').innerText = '➤';
 }
 
-export async function uploadFile(currentRoom) {
-    if(!selectedFile || !currentRoom) return;
-    const caption = document.getElementById('file-caption').value.trim();
-    let finalCaption = caption ? encrypt(caption) : '';
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('room_id', currentRoom);
-    formData.append('caption', finalCaption);
+export function sendMessage(socket, currentRoom) {
+    if (!currentRoom) {
+        alert('Будь ласка, оберіть чат');
+        return;
+    }
 
-    const token = getAccessToken();
-    await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
+    if (fileToSend) {
+        const formData = new FormData();
+        formData.append('file', fileToSend);
+        formData.append('room_id', currentRoom);
+        formData.append('caption', document.getElementById('file-caption').value);
+
+        fetchWithAuth('/api/upload', {
+            method: 'POST',
+            body: formData
+        }).then(() => {
+            cancelFile();
+        });
+        return;
+    }
+
+    if (UI.isEditing()) {
+        const {id, content} = UI.finishEditing();
+        if (content.trim()) {
+            socket.emit('edit_message', {
+                token: getAccessToken(),
+                id: id,
+                content: content,
+                room_id: currentRoom
+            });
+        }
+        return;
+    }
+
+    const input = document.getElementById('msg-input');
+    const content = input.value.trim();
+    if (!content) return;
+
+    socket.emit('send_message', {
+        token: getAccessToken(),
+        room_id: currentRoom,
+        content: content,
+        type: 'text'
     });
-    cancelFile();
+    input.value = '';
 }
+
+window.addReaction = (id, reaction) => {
+    const currentRoom = window.currentRoomId || localStorage.getItem('lastRoom');
+};
+
+window.editMessage = (id, type) => {
+    UI.startEditing(id, type);
+};
+
+window.deleteMessage = (id, forEveryone) => {
+    if (confirm('Видалити повідомлення?')) {
+        const currentRoom = document.querySelector('.list-item.active').getAttribute('onclick').match(/'([^']+)'/)[1];
+        window.socket.emit('delete_message', {
+            token: getAccessToken(),
+            id: id,
+            room_id: currentRoom,
+            for_everyone: forEveryone
+        });
+    }
+};
+
+window.toggleReaction = (msgId, roomId) => {
+    window.socket.emit('remove_reaction', {
+        token: getAccessToken(),
+        id: msgId,
+        room_id: roomId
+    });
+};
+
+window.addReaction = (msgId, reaction) => {
+    const currentRoom = document.querySelector('.list-item.active').getAttribute('onclick').match(/'([^']+)'/)[1];
+    window.socket.emit('add_reaction', {
+        token: getAccessToken(),
+        id: msgId,
+        reaction: reaction,
+        room_id: currentRoom
+    });
+};

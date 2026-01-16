@@ -1,465 +1,498 @@
-import { decrypt, formatDate, encrypt } from './utils.js';
-import { getMyId } from './api.js';
-
-export const EMOJIS = [
-    '👍','👎','❤️','🔥','🎉','😂','😮','😢','😡','🤔','👀','🤝','🙏','🤡','💩','👻','💀','👽','👾','🤖',
-    '🎃','😺','😸','😹','😻','😼','😽','🙀','😿','😾','👋','🤚','🖐','✋','🖖','👌','✌️','🤞','🤟',
-    '🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏',
-    '✍️','💅','🤳','💪','🦵','🦶','👣','👂','👃','🧠','🦷','🦴','👀','👁','👅',
-    '👄','💋','👶','👧','🧒','👦','👩','🧑','👨','👩‍🦱','🧑‍🦱','👨‍🦱','👩‍🦰','🧑‍🦰','👨‍🦰','👱‍♀️','👱','👱‍♂️',
-    '👩‍🦳','🧑‍🦳','👨‍🦳','👩‍🦲','🧑‍🦲','👨‍🦲','🧔','👵','🧓','👴','👲','👳‍♀️','👳','👳‍♂️','🧕','👮‍♀️','👮','👮‍♂️','👷‍♀️',
-    '👷','👷‍♂️','💂‍♀️','💂','💂‍♂️','🕵️‍♀️','🕵️','🕵️‍♂️','👩‍⚕️','🧑‍⚕️','👨‍⚕️','👩‍🌾','🧑‍🌾','👨‍🌾','👩‍🍳','🧑‍🍳','👨‍🍳','👩‍🎓',
-    '🧑‍🎓','👨‍🎓','👩‍🎤','🧑‍🎤','👨‍🎤','👩‍🏫','🧑‍🏫','👨‍🏫','👩‍🏭','🧑‍🏭','👨‍🏭','👩‍💻','🧑‍💻','👨‍💻','👩‍💼','🧑‍💼','👨‍💼'
-];
+import {getMyId} from './api.js';
+import {decrypt} from './utils.js';
 
 let editingMessageId = null;
 
-export function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.remove('active');
-    }
-}
+const emojiData = {
+    'Смайли': ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔'],
+    'Жести': ['👋', '🤚', '🖐', '✋', '🖖', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏'],
+    'Серця': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟'],
+    'Емоції': ['🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯'],
+    'Об\'єкти': ['🔥', '🎉', '✨', '💩', '🤡', '👻', '💀', '👽', '🤖', '🎃', '🎄', '🎆', '🧨', '🎈', '🎁', '🎀', '🏆', '🥇', '🥈', '🥉', '⚽', '🏀', '🏈', '⚾', '🎾']
+};
 
-export function initEmojiPicker(onClick) {
-    const picker = document.getElementById('emoji-picker');
-    EMOJIS.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.className = 'emoji-btn';
-        btn.innerText = emoji;
-        btn.onclick = () => onClick(emoji);
-        picker.appendChild(btn);
-    });
-}
-
-export function toggleEmoji() {
-    const picker = document.getElementById('emoji-picker');
-    picker.style.display = picker.style.display === 'none' ? 'grid' : 'none';
-}
-
-export function renderUserList(users, onUserClick) {
+export function renderRoomList(rooms, currentRoomId, onClick) {
     const container = document.getElementById('list-container');
-    container.innerHTML = '';
-
-    users.forEach(user => {
-        const div = document.createElement('div');
-        div.className = 'list-item';
-        div.onclick = () => onUserClick(user);
-
-        let statusText = '';
-        let color = '#999';
-
-        if (user.is_online) {
-            statusText = '● Online';
-            color = 'var(--success-color)';
-        } else {
-            const gender = user.gender || 'male';
-            const genderVerb = gender === 'female' ? 'Була' : 'Був';
-            statusText = `${genderVerb} ${formatDate(user.last_active)}`;
-        }
-
-        let avatarStyle = user.avatar
-            ? `background-image:url(data:image/png;base64,${user.avatar})`
-            : 'background-color:#ccc';
-
-        div.innerHTML = `
-            <div class="avatar" style="${avatarStyle}">${user.avatar ? '' : user.name[0]}</div>
-            <div style="display:flex; flex-direction:column;">
-                <span style="font-weight:500">${user.name}</span>
-                <span style="color:${color}; font-size:11px;">${statusText}</span>
+    container.innerHTML = rooms.map(room => {
+        const isActive = room.id === currentRoomId ? 'active' : '';
+        const avatarStyle = room.avatar
+            ? `background-image: url(data:image/png;base64,${room.avatar})`
+            : '';
+        return `
+            <div class="list-item ${isActive}" onclick="window.onRoomClick('${room.id}')">
+                <div class="avatar" style="${avatarStyle}">${!room.avatar ? room.name[0].toUpperCase() : ''}</div>
+                <div>
+                    <div style="font-weight: 600;">${room.name}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                        ${room.type === 'private' ? 'Особистий' : 'Група'}
+                    </div>
+                </div>
             </div>
         `;
-        container.appendChild(div);
-    });
+    }).join('');
+
+    window.onRoomClick = (id) => {
+        const r = rooms.find(x => x.id === id);
+        if (r) onClick(r);
+    };
 }
 
-export function renderRoomList(rooms, currentRoomId, onRoomClick) {
+export function renderUserList(users, onClick, blockedUsers = []) {
     const container = document.getElementById('list-container');
-    container.innerHTML = '';
+    const myId = getMyId();
+    container.innerHTML = users.filter(u => u.id !== myId).map(user => {
+        const isBlocked = blockedUsers.includes(user.id) || (!user.avatar && !user.is_online && !user.bio && !user.real_name);
 
-    rooms.forEach(room => {
-        const div = document.createElement('div');
-        div.className = 'list-item';
-        if(currentRoomId === room.id) div.classList.add('active');
+        let avatarStyle = '';
+        if (user.avatar && !isBlocked) {
+            avatarStyle = `background-image: url(data:image/png;base64,${user.avatar})`;
+        }
 
-        let avatarStyle = room.avatar
-            ? `background-image:url(data:image/png;base64,${room.avatar})`
-            : 'background-color:#3b82f6; color:white';
+        const statusColor = (user.is_online && !isBlocked) ? 'var(--success-color)' : 'var(--text-secondary)';
+        let statusText = 'Offline';
 
-        div.innerHTML = `
-            <div class="avatar" style="${avatarStyle}">${room.avatar ? '' : '#'}</div>
-            <span style="font-weight:500">${room.name || 'Чат'}</span>
+        if (user.is_online && !isBlocked) {
+            statusText = 'Online';
+        } else if (user.last_active && !isBlocked) {
+            const date = new Date(user.last_active);
+            const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            const verb = user.gender === 'female' ? 'була' : 'був';
+            statusText = `${verb} о ${timeStr}`;
+        }
+
+        return `
+            <div class="list-item" onclick="window.onUserClick('${user.id}')">
+                <div class="avatar" style="${avatarStyle}">
+                    ${!avatarStyle ? user.name[0].toUpperCase() : ''}
+                    <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; background:${statusColor}; border-radius:50%; border:2px solid white;"></div>
+                </div>
+                <div>
+                    <div style="font-weight: 600;">${user.name}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">${statusText}</div>
+                </div>
+            </div>
         `;
-        div.onclick = () => onRoomClick(room);
-        container.appendChild(div);
-    });
+    }).join('');
+
+    window.onUserClick = (id) => {
+        const u = users.find(x => x.id === id);
+        if (u) onClick(u);
+    };
+}
+
+function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (['pdf'].includes(ext)) return '📄';
+    if (['doc', 'docx'].includes(ext)) return '📝';
+    if (['xls', 'xlsx'].includes(ext)) return '📊';
+    if (['ppt', 'pptx'].includes(ext)) return '📉';
+    if (['exe', 'msi'].includes(ext)) return '🖥️';
+    if (['zip', 'rar', '7z'].includes(ext)) return '📦';
+    if (['mp3', 'wav', 'ogg'].includes(ext)) return '🎵';
+    return '📁';
 }
 
 export function appendMessage(msg, socket) {
     const area = document.getElementById('messages-area');
-    const myId = getMyId();
-    const isMe = msg.sender_id === myId;
+    const div = document.createElement('div');
+    const isMe = msg.sender_id === getMyId();
+    div.className = `message ${isMe ? 'sent' : 'received'}`;
+    div.id = `msg-${msg.id}`;
 
     let contentHtml = '';
-    let rawText = '';
+    let captionHtml = '';
 
     if (msg.type === 'text') {
-        rawText = decrypt(msg.content);
-        let safeText = rawText.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        contentHtml = `<span class="msg-content-span">${safeText}</span>`;
+        const decrypted = decrypt(msg.content);
+        contentHtml = linkify(decrypted);
     } else if (msg.type === 'file') {
-        const isImage = msg.filename && /\.(jpg|jpeg|png|gif|webp)$/i.test(msg.filename);
-        const isAudio = msg.filename && /\.(mp3|wav|ogg|m4a)$/i.test(msg.filename);
+        try {
+            const data = JSON.parse(msg.content);
+            const src = `data:application/octet-stream;base64,${data.file}`;
+            const ext = msg.filename.split('.').pop().toLowerCase();
+            const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+            const isVideo = ['mp4', 'webm', 'mov'].includes(ext);
+            const isAudio = ['mp3', 'wav', 'ogg'].includes(ext);
 
-        if (isImage) {
-            contentHtml = `<img src="data:image;base64,${msg.content}" class="chat-image" alt="image">`;
-        } else if (isAudio) {
-             contentHtml = `
-                <div style="display:flex; align-items:center; gap:5px;">
-                    <span>🎵 ${msg.filename}</span>
-                </div>
-                <audio controls src="data:audio/${msg.filename.split('.').pop()};base64,${msg.content}" style="width:200px; margin-top:5px;"></audio>
-             `;
-        } else {
-            contentHtml = `<a href="data:application/octet-stream;base64,${msg.content}" download="${msg.filename}" target="_blank">📎 ${msg.filename}</a>`;
+            if (isImage) {
+                contentHtml = `<img src="data:image/${ext};base64,${data.file}" class="chat-image" onclick="window.openImage(this.src)">`;
+            } else if (isVideo) {
+                contentHtml = `<video controls src="data:video/${ext};base64,${data.file}" style="max-width:100%; border-radius:10px;"></video>`;
+            } else if (isAudio) {
+                contentHtml = `<audio controls src="data:audio/${ext};base64,${data.file}" style="width:100%"></audio>`;
+            } else {
+                const icon = getFileIcon(msg.filename);
+                contentHtml = `
+                    <div style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(0,0,0,0.05); border-radius:10px;">
+                        <div style="font-size:2rem;">${icon}</div>
+                        <div style="flex:1; overflow:hidden;">
+                            <div style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${msg.filename}</div>
+                            <a href="${src}" download="${msg.filename}" style="font-size:0.8rem; text-decoration:none;">⬇️ Завантажити</a>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (data.caption) {
+                captionHtml = `<div style="margin-top:5px;">${linkify(data.caption)}</div>`;
+            }
+        } catch (e) {
+            contentHtml = 'Error loading file';
         }
     } else if (msg.type === 'voice') {
         contentHtml = `<audio controls src="${msg.content}"></audio>`;
     } else if (msg.type === 'video') {
-        contentHtml = `<video src="${msg.content}" controls class="video-msg"></video>`;
+        contentHtml = `<video controls src="${msg.content}" class="video-msg"></video>`;
     }
 
-    let avatarHtml = '';
-    if(!isMe) {
-        let bg = msg.sender_avatar ? `background-image:url(data:image/png;base64,${msg.sender_avatar})` : 'background-color:#ccc';
-        avatarHtml = `<div class="msg-avatar" style="${bg}; width:24px; height:24px; border-radius:50%; display:inline-block; margin-right:5px; background-size:cover;"></div>`;
-    }
+    const senderName = isMe ? 'Ви' : msg.sender_name;
+    const avatarStyle = (msg.sender_avatar)
+        ? `background-image: url(data:image/png;base64,${msg.sender_avatar})`
+        : '';
 
-    const div = document.createElement('div');
-    div.className = `message ${isMe ? 'sent' : 'received'}`;
-    div.dataset.id = msg.id;
-
-    let actionsHtml = `<div class="message-actions">`;
-    actionsHtml += `<button class="action-btn react-btn" title="Реакція">☺</button>`;
-    actionsHtml += `<button class="action-btn delete-me" title="Видалити для себе">✖Я</button>`;
-    if (isMe) {
-        actionsHtml += `<button class="action-btn delete-all" title="Видалити для всіх">✖Всі</button>`;
-        if(msg.type === 'text') actionsHtml += `<button class="action-btn edit">✎</button>`;
-    }
-    actionsHtml += `</div>`;
-
-    let timeHtml = formatDate(msg.created_at);
-    if (msg.edited_at) {
-        timeHtml += ` <span style="font-style:italic; font-size:9px;">(ред. ${formatDate(msg.edited_at)})</span>`;
-    }
-
-    div.innerHTML = `
-        ${actionsHtml}
-        ${!isMe ? `<div class="msg-sender">${avatarHtml} ${msg.sender_name}</div>` : ''}
-        <div class="msg-body">${contentHtml}</div>
-        <div class="reactions-list"></div>
-        <div class="msg-meta">${timeHtml}</div>
+    const senderHtml = `
+        <div class="msg-sender" onclick="window.openUserProfile('${msg.sender_id}')">
+            <div class="msg-sender-avatar" style="${avatarStyle}"></div>
+            <span>${senderName}</span>
+        </div>
     `;
 
-    if(msg.reactions) renderReactions(div, msg.reactions, socket, msg.room_id);
-
-    div.querySelector('.react-btn').onclick = () => {
-        showReactionPicker(socket, msg.id, msg.room_id, div);
-    };
-
-    div.querySelector('.delete-me').onclick = () => {
-        socket.emit('delete_message', { id: msg.id, room_id: msg.room_id, for_everyone: false, token: sessionStorage.getItem('access_token') });
-    };
-
-    if (isMe) {
-        div.querySelector('.delete-all').onclick = () => {
-            if(confirm('Видалити для всіх?'))
-                socket.emit('delete_message', { id: msg.id, room_id: msg.room_id, for_everyone: true, token: sessionStorage.getItem('access_token') });
-        };
-        if(msg.type === 'text') {
-            div.querySelector('.edit').onclick = () => startEditing(msg.id, rawText);
-        }
-    }
+    div.innerHTML = `
+        ${!isMe ? senderHtml : ''}
+        <div class="msg-content">
+            ${contentHtml}
+            ${captionHtml}
+        </div>
+        <div class="reactions-list" id="reactions-${msg.id}"></div>
+        <div class="msg-meta">
+            ${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+            ${msg.edited_at ? '<span title="Redacted">✏️</span>' : ''}
+        </div>
+        <div class="message-actions">
+            <div style="position:relative;">
+                <button class="action-btn" onclick="window.toggleReactionMenu(${msg.id})">➕</button>
+                <div id="reaction-menu-${msg.id}" class="reaction-popover" style="display:none;"></div>
+            </div>
+            ${isMe ? `<button class="action-btn" onclick="window.editMessage(${msg.id}, '${msg.type}')">✏️</button>` : ''}
+            <button class="action-btn delete-me" onclick="window.deleteMessage(${msg.id}, false)">🗑</button>
+            ${isMe ? `<button class="action-btn delete-all" onclick="window.deleteMessage(${msg.id}, true)">🗑 All</button>` : ''}
+        </div>
+    `;
 
     area.appendChild(div);
     area.scrollTop = area.scrollHeight;
-}
 
-function showReactionPicker(socket, msgId, roomId, messageDiv) {
-    const existing = document.querySelector('.reaction-picker-popup');
-    if(existing) existing.remove();
-
-    const picker = document.createElement('div');
-    picker.className = 'reaction-picker-popup';
-    picker.style.position = 'absolute';
-    picker.style.bottom = '100%';
-    picker.style.left = '0';
-    picker.style.background = 'white';
-    picker.style.border = '1px solid #ccc';
-    picker.style.borderRadius = '8px';
-    picker.style.padding = '5px';
-    picker.style.display = 'grid';
-    picker.style.gridTemplateColumns = 'repeat(6, 1fr)';
-    picker.style.gap = '5px';
-    picker.style.zIndex = '100';
-    picker.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-    picker.style.width = '300px';
-    picker.style.maxHeight = '200px';
-    picker.style.overflowY = 'auto';
-
-    EMOJIS.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.innerText = emoji;
-        btn.style.border = 'none';
-        btn.style.background = 'transparent';
-        btn.style.cursor = 'pointer';
-        btn.style.fontSize = '18px';
-        btn.onclick = () => {
-            socket.emit('add_reaction', { id: msgId, room_id: roomId, reaction: emoji, token: sessionStorage.getItem('access_token') });
-            picker.remove();
-        };
-        picker.appendChild(btn);
-    });
-
-    messageDiv.appendChild(picker);
-    setTimeout(() => {
-        const close = (e) => {
-            if(!picker.contains(e.target)) {
-                picker.remove();
-                document.removeEventListener('click', close);
-            }
-        };
-        document.addEventListener('click', close);
-    }, 100);
-}
-
-export function updateMessageReactions(id, reactions, socket, roomId) {
-    const div = document.querySelector(`.message[data-id="${id}"]`);
-    if(div) renderReactions(div, reactions, socket, roomId);
-}
-
-function renderReactions(div, reactions, socket, roomId) {
-    const list = div.querySelector('.reactions-list');
-    list.innerHTML = '';
-    const myId = getMyId();
-
-    for(const [uid, data] of Object.entries(reactions)) {
-        const pill = document.createElement('div');
-        pill.className = 'reaction-pill';
-
-        let avatarStyle = data.avatar ? `background-image:url(data:image/png;base64,${data.avatar})` : 'background-color:#ccc';
-
-        pill.innerHTML = `
-            <div class="reaction-avatar" style="${avatarStyle}" title="${data.name}"></div>
-            <span>${data.reaction}</span>
-        `;
-
-        if (uid === myId) {
-            pill.style.cursor = 'pointer';
-            pill.style.borderColor = 'var(--primary-color)';
-            pill.title = 'Натисніть, щоб видалити';
-            pill.onclick = () => {
-                if(confirm('Видалити вашу реакцію?')) {
-                    socket.emit('remove_reaction', { id: div.dataset.id, room_id: roomId, token: sessionStorage.getItem('access_token') });
-                }
-            };
-        }
-
-        list.appendChild(pill);
+    if (msg.reactions) {
+        updateMessageReactions(msg.id, msg.reactions, socket, msg.room_id);
     }
 }
 
-function startEditing(id, text) {
-    editingMessageId = id;
-    const input = document.getElementById('msg-input');
-    input.value = text;
-    input.focus();
-    input.style.borderColor = 'var(--primary-color)';
-    document.getElementById('send-btn').innerText = '✓';
-}
+window.toggleReactionMenu = (msgId) => {
+    const menu = document.getElementById(`reaction-menu-${msgId}`);
+    const wasVisible = menu.style.display === 'block';
 
-export function finishEditing(socket, currentRoom) {
-    if (!editingMessageId) return false;
-    const input = document.getElementById('msg-input');
-    const text = input.value.trim();
-    if (!text) return false;
+    document.querySelectorAll('.reaction-popover').forEach(el => el.style.display = 'none');
 
-    socket.emit('edit_message', {
-        id: editingMessageId,
-        content: encrypt(text),
-        room_id: currentRoom,
-        token: sessionStorage.getItem('access_token')
-    });
+    if (!wasVisible) {
+        menu.style.display = 'block';
+        if (!menu.hasChildNodes()) {
+            const tabs = document.createElement('div');
+            tabs.className = 'emoji-tabs';
+            const content = document.createElement('div');
+            content.className = 'emoji-grid';
 
-    editingMessageId = null;
-    input.value = '';
-    input.style.borderColor = 'var(--border-color)';
-    document.getElementById('send-btn').innerText = '➤';
-    return true;
-}
+            Object.keys(emojiData).forEach((cat, idx) => {
+                const btn = document.createElement('button');
+                btn.className = `emoji-tab-btn ${idx === 0 ? 'active' : ''}`;
+                btn.innerText = cat;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    menu.querySelectorAll('.emoji-tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderReactionGrid(content, emojiData[cat], msgId);
+                };
+                tabs.appendChild(btn);
+            });
 
-export function updateMessageInDOM(id, newContent, editedAt) {
-    const div = document.querySelector(`.message[data-id="${id}"]`);
-    if (div) {
-        const body = div.querySelector('.msg-content-span');
-        if (body) {
-            let text = decrypt(newContent);
-            body.innerText = text;
-        }
-        const meta = div.querySelector('.msg-meta');
-        if (meta && !meta.innerText.includes('ред.')) {
-            meta.innerHTML += ` <span style="font-style:italic; font-size:9px;">(ред. ${formatDate(editedAt)})</span>`;
+            menu.appendChild(tabs);
+            menu.appendChild(content);
+            renderReactionGrid(content, emojiData['Смайли'], msgId);
         }
     }
+};
+
+function renderReactionGrid(container, emojis, msgId) {
+    container.innerHTML = emojis.map(e => `
+        <button class="emoji-btn" onclick="window.addReaction(${msgId}, '${e}'); document.getElementById('reaction-menu-${msgId}').style.display='none'">${e}</button>
+    `).join('');
 }
 
-export function removeMessageFromDOM(id) {
-    const div = document.querySelector(`.message[data-id="${id}"]`);
-    if (div) div.remove();
-}
+export function updateMessageReactions(msgId, reactions, socket, roomId) {
+    const container = document.getElementById(`reactions-${msgId}`);
+    if (!container) return;
 
-export function renderParticipants(participants, myId, myRole, onRemove, onPromote, onDemote) {
-    const list = document.getElementById('group-participants-list');
+    const reactionGroups = {};
+    for (const uid in reactions) {
+        const r = reactions[uid];
+        if (!reactionGroups[r.reaction]) reactionGroups[r.reaction] = [];
+        reactionGroups[r.reaction].push(r);
+    }
 
-    list.innerHTML = participants.map(p => {
-        let actions = '';
-        if (myId !== p.id) {
-            if (myRole === 'owner' || (myRole === 'admin' && p.role === 'member')) {
-                actions += `<span class="remove-btn" data-uid="${p.id}" title="Видалити">✖</span>`;
-            }
-            if (myRole === 'owner') {
-                if (p.role === 'member') {
-                    actions += `<span class="promote-btn" data-uid="${p.id}" style="cursor:pointer; color:var(--success-color); font-weight:bold; margin-left:10px;" title="Зробити адміном">↑</span>`;
-                } else if (p.role === 'admin') {
-                    actions += `<span class="demote-btn" data-uid="${p.id}" style="cursor:pointer; color:var(--text-secondary); font-weight:bold; margin-left:10px;" title="Забрати адмінку">↓</span>`;
-                }
-            }
-        }
-
-        let roleLabel = '';
-        if(p.role === 'owner') roleLabel = '<span style="font-size:10px; background:gold; padding:2px 5px; border-radius:4px; margin-left:5px;">Власник</span>';
-        else if(p.role === 'admin') roleLabel = '<span style="font-size:10px; background:#e0e7ff; color:var(--primary-color); padding:2px 5px; border-radius:4px; margin-left:5px;">Адмін</span>';
+    container.innerHTML = Object.keys(reactionGroups).map(reaction => {
+        const users = reactionGroups[reaction];
+        const avatars = users.slice(0, 3).map(u => {
+            const style = u.avatar ? `background-image: url(data:image/png;base64,${u.avatar})` : '';
+            return `<div class="reaction-avatar" style="${style}" title="${u.name}"></div>`;
+        }).join('');
 
         return `
-        <div class="participant-row">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div class="avatar" style="width:30px; height:30px; ${p.avatar ? `background-image:url(data:image/png;base64,${p.avatar})` : ''}"></div>
-                <span>${p.name} ${roleLabel}</span>
+            <div class="reaction-pill" onclick="window.toggleReaction(${msgId}, '${roomId}')">
+                ${reaction} 
+                <div style="display:flex; margin-left:4px;">${avatars}</div>
+                <span style="font-size:0.8rem; margin-left:4px;">${users.length}</span>
             </div>
-            <div>${actions}</div>
-        </div>
         `;
     }).join('');
+}
 
-    if (onRemove) {
-        list.querySelectorAll('.remove-btn').forEach(btn => {
-            btn.onclick = () => onRemove(btn.dataset.uid);
-        });
+export function updateMessageInDOM(msgId, newContent, editedAt) {
+    const msgEl = document.getElementById(`msg-${msgId}`);
+    if (msgEl) {
+        const contentEl = msgEl.querySelector('.msg-content');
+        if (contentEl) {
+            const existingCaption = contentEl.querySelector('div[style="margin-top:5px;"]');
+            if (existingCaption) {
+                existingCaption.innerHTML = linkify(newContent);
+            } else {
+                contentEl.innerHTML = linkify(newContent);
+            }
+        }
+        const metaEl = msgEl.querySelector('.msg-meta');
+        if (metaEl && !metaEl.innerHTML.includes('✏️')) {
+            metaEl.innerHTML += ' <span title="Redacted">✏️</span>';
+        }
     }
-    if (onPromote) {
-        list.querySelectorAll('.promote-btn').forEach(btn => {
-            btn.onclick = () => onPromote(btn.dataset.uid);
-        });
-    }
-    if (onDemote) {
-        list.querySelectorAll('.demote-btn').forEach(btn => {
-            btn.onclick = () => onDemote(btn.dataset.uid);
-        });
-    }
+}
+
+export function removeMessageFromDOM(msgId) {
+    const msgEl = document.getElementById(`msg-${msgId}`);
+    if (msgEl) msgEl.remove();
+}
+
+export function initEmojiPicker(onSelect) {
+    const picker = document.getElementById('emoji-picker');
+    picker.innerHTML = '';
+
+    const tabs = document.createElement('div');
+    tabs.className = 'emoji-tabs';
+
+    const content = document.createElement('div');
+    content.className = 'emoji-grid';
+
+    Object.keys(emojiData).forEach((cat, idx) => {
+        const btn = document.createElement('button');
+        btn.className = `emoji-tab-btn ${idx === 0 ? 'active' : ''}`;
+        btn.innerText = cat;
+        btn.onclick = () => {
+            picker.querySelectorAll('.emoji-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderEmojiGrid(content, emojiData[cat], onSelect);
+        };
+        tabs.appendChild(btn);
+    });
+
+    picker.appendChild(tabs);
+    picker.appendChild(content);
+    renderEmojiGrid(content, emojiData['Смайли'], onSelect);
+}
+
+function renderEmojiGrid(container, emojis, onSelect) {
+    container.innerHTML = emojis.map(e => `<button class="emoji-btn">${e}</button>`).join('');
+    container.querySelectorAll('.emoji-btn').forEach(btn => {
+        btn.onclick = () => {
+            onSelect(btn.innerText);
+            document.getElementById('emoji-picker').style.display = 'none';
+        };
+    });
+}
+
+export function toggleEmoji() {
+    const p = document.getElementById('emoji-picker');
+    p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+    p.style.flexDirection = 'column';
+}
+
+export function showNotification(title, body, onClick) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+
+    toast.innerHTML = `
+        <button class="toast-close-btn">&times;</button>
+        <div class="toast-title">${title}</div>
+        <div class="toast-msg">${body}</div>
+    `;
+
+    const closeBtn = toast.querySelector('.toast-close-btn');
+    closeBtn.onclick = (e) => {
+        e.stopPropagation();
+        toast.style.animation = 'slideInRight 0.3s reverse forwards';
+        setTimeout(() => toast.remove(), 300);
+    };
+
+    toast.onclick = () => {
+        if (onClick) onClick();
+        toast.style.animation = 'slideInRight 0.3s reverse forwards';
+        setTimeout(() => toast.remove(), 300);
+    };
+
+    container.appendChild(toast);
 }
 
 export function renderProfileGallery(gallery, currentAvatar, onSelect, onDelete) {
     const container = document.getElementById('profile-gallery');
-    container.innerHTML = '';
+    if (!gallery || gallery.length === 0) {
+        container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:gray;">Немає фото</p>';
+        return;
+    }
 
-    gallery.forEach(imgData => {
-        const div = document.createElement('div');
-        div.className = 'gallery-item';
-        div.style.backgroundImage = `url(data:image/png;base64,${imgData})`;
-        if (imgData === currentAvatar) div.classList.add('selected');
+    container.innerHTML = gallery.map(img => {
+        const isSelected = img === currentAvatar ? 'selected' : '';
+        return `
+            <div class="gallery-item ${isSelected}" style="background-image: url(data:image/png;base64,${img})">
+                 <div class="delete-gallery-btn">×</div>
+            </div>
+        `;
+    }).join('');
 
-        div.onclick = (e) => {
-            if(e.target.classList.contains('delete-gallery-btn')) return;
-            document.querySelectorAll('.gallery-item').forEach(el => el.classList.remove('selected'));
-            div.classList.add('selected');
-            onSelect(imgData);
+    const items = container.querySelectorAll('.gallery-item');
+    items.forEach((item, index) => {
+        item.onclick = (e) => {
+            if (e.target.classList.contains('delete-gallery-btn')) {
+                e.stopPropagation();
+                onDelete(gallery[index]);
+            } else {
+                onSelect(gallery[index]);
+            }
         };
-
-        const delBtn = document.createElement('div');
-        delBtn.className = 'delete-gallery-btn';
-        delBtn.innerText = 'x';
-        delBtn.onclick = () => onDelete(imgData);
-
-        div.appendChild(delBtn);
-        container.appendChild(div);
     });
 }
 
 export function renderReadOnlyGallery(gallery) {
     const container = document.getElementById('user-info-gallery');
-    container.innerHTML = '';
-
-    if(gallery.length === 0) {
-        container.innerHTML = '<p style="color:#999; font-size:12px;">Немає фото</p>';
+    if (!gallery || gallery.length === 0) {
+        container.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:gray;">Немає фото</p>';
         return;
     }
-
-    gallery.forEach(imgData => {
-        const div = document.createElement('div');
-        div.className = 'gallery-item';
-        div.style.backgroundImage = `url(data:image/png;base64,${imgData})`;
-        div.style.cursor = 'default';
-        container.appendChild(div);
-    });
+    container.innerHTML = gallery.map(img => `
+        <div class="gallery-item" style="background-image: url(data:image/png;base64,${img}); cursor:default;"></div>
+    `).join('');
 }
 
-export function showNotification(title, message) {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `<div class="toast-title">${title}</div><div class="toast-msg">${message}</div>`;
-    container.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+export function renderParticipants(participants, myId, myRole, onRemove, onPromote, onDemote) {
+    const container = document.getElementById('group-participants-list');
+    container.innerHTML = participants.map(p => {
+        const isMe = p.id === myId;
+        const roleLabel = p.role === 'owner' ? '👑' : (p.role === 'admin' ? '⭐' : '');
+        let actions = '';
+
+        if (!isMe) {
+            if (myRole === 'owner') {
+                if (p.role === 'member') actions += `<span class="remove-btn" onclick="window.promoteParticipant('${p.id}')">⬆️ Адмін</span> `;
+                if (p.role === 'admin') actions += `<span class="remove-btn" onclick="window.demoteParticipant('${p.id}')">⬇️ Мембер</span> `;
+                actions += `<span class="remove-btn" onclick="window.removeParticipant('${p.id}')">Видалити</span>`;
+            } else if (myRole === 'admin' && p.role === 'member') {
+                actions += `<span class="remove-btn" onclick="window.removeParticipant('${p.id}')">Видалити</span>`;
+            }
+        }
+
+        return `
+            <div class="participant-row">
+                <div style="display:flex; align-items:center;">
+                    <div class="avatar" style="width:32px; height:32px; font-size:0.8rem; margin-right:10px; background-image: url(data:image/png;base64,${p.avatar || ''})">
+                        ${!p.avatar ? p.name[0] : ''}
+                    </div>
+                    <div>
+                        <div style="font-weight:600; font-size:0.9rem;">${p.name} ${roleLabel}</div>
+                    </div>
+                </div>
+                <div style="font-size:0.8rem;">${actions}</div>
+            </div>
+        `;
+    }).join('');
+
+    window.removeParticipant = onRemove;
+    window.promoteParticipant = onPromote;
+    window.demoteParticipant = onDemote;
 }
 
-export function initCropper(imageSrc, callback) {
+export function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+
+export function initCropper(imageSrc, onSave) {
     const modal = document.getElementById('crop-modal');
-    const imgEl = document.getElementById('crop-image');
+    const img = document.getElementById('crop-image');
+    modal.classList.add('active');
+    img.src = imageSrc;
 
-    imgEl.src = '';
+    let cropper = new Cropper(img, {
+        aspectRatio: 1,
+        viewMode: 1
+    });
 
-    const startCropper = () => {
-        imgEl.src = imageSrc;
-        modal.classList.add('active');
-
-        let cropper = new Cropper(imgEl, {
-            aspectRatio: 1,
-            viewMode: 1
-        });
-
-        const saveBtn = document.getElementById('crop-save-btn');
-        const cancelBtn = document.getElementById('crop-cancel-btn');
-
-        const cleanup = () => {
-            cropper.destroy();
-            modal.classList.remove('active');
-            imgEl.src = '';
-
-            const newSave = saveBtn.cloneNode(true);
-            const newCancel = cancelBtn.cloneNode(true);
-            saveBtn.parentNode.replaceChild(newSave, saveBtn);
-            cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
-        };
-
-        document.getElementById('crop-save-btn').onclick = () => {
-            const canvas = cropper.getCroppedCanvas({ width: 300, height: 300 });
-            const base64 = canvas.toDataURL('image/png').split(',')[1];
-            callback(base64);
-            cleanup();
-        };
-
-        document.getElementById('crop-cancel-btn').onclick = cleanup;
+    document.getElementById('crop-save-btn').onclick = () => {
+        const canvas = cropper.getCroppedCanvas({width: 200, height: 200});
+        onSave(canvas.toDataURL().split(',')[1]);
+        cropper.destroy();
+        modal.classList.remove('active');
     };
 
-    startCropper();
+    document.getElementById('crop-cancel-btn').onclick = () => {
+        cropper.destroy();
+        modal.classList.remove('active');
+    };
 }
+
+export function startEditing(id, type) {
+    if (type !== 'text') return;
+    const msgEl = document.getElementById(`msg-${id}`);
+    const content = msgEl.querySelector('.msg-content a')
+        ? msgEl.querySelector('.msg-content a').href
+        : msgEl.querySelector('.msg-content').innerText;
+
+    document.getElementById('msg-input').value = content;
+    document.getElementById('msg-input').focus();
+    editingMessageId = id;
+
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.innerText = '✓';
+    sendBtn.style.color = 'var(--success-color)';
+}
+
+export function finishEditing() {
+    const content = document.getElementById('msg-input').value;
+    document.getElementById('msg-input').value = '';
+
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.innerText = '➤';
+    sendBtn.style.color = 'var(--primary-color)';
+
+    const id = editingMessageId;
+    editingMessageId = null;
+    return {id, content};
+}
+
+export function isEditing() {
+    return editingMessageId !== null;
+}
+
+function linkify(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, url => `<a href="${url}" target="_blank">${url}</a>`);
+}
+
+window.openImage = (src) => {
+    const w = window.open("");
+    w.document.write(`<img src="${src}" style="max-width:100%">`);
+};

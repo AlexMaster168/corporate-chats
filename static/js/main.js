@@ -1,6 +1,6 @@
-import { fetchWithAuth, getAccessToken, getMyId, getMyName, logout } from './api.js';
-import { decrypt } from './utils.js';
-import { initSocket } from './socket.js';
+import {fetchWithAuth, getAccessToken, getMyId, getMyName, logout} from './api.js';
+import {decrypt} from './utils.js';
+import {initSocket} from './socket.js';
 import * as UI from './ui.js';
 import * as Groups from './modules/groups.js';
 import * as Chat from './modules/chat.js';
@@ -15,18 +15,30 @@ if (Notification.permission !== "granted") {
 }
 
 const socket = initSocket();
-// Делаем сокет глобально доступным для модулей, которые используют window.socket
 window.socket = socket;
 
 let currentTab = 'groups';
 let cachedUsers = [];
-let cachedProfile = { bio: '', avatars_gallery: [], avatar: null, blocked_users: [], real_name: '', birth_date: '', gender: 'male' };
+let cachedProfile = {
+    bio: '',
+    avatars_gallery: [],
+    avatar: null,
+    blocked_users: [],
+    real_name: '',
+    birth_date: '',
+    gender: 'male'
+};
 
 const notificationSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
 
 UI.initEmojiPicker((emoji) => {
     document.getElementById('msg-input').value += emoji;
     document.getElementById('msg-input').focus();
+});
+
+document.getElementById('profile-birthdate-picker').addEventListener('change', (e) => {
+    const val = e.target.value;
+    document.getElementById('profile-birthdate').value = val;
 });
 
 socket.on('connect', () => {
@@ -37,7 +49,7 @@ socket.on('data_update', (data) => {
     Groups.setCachedRooms(data.rooms);
     cachedUsers = data.users;
 
-    if(data.my_profile) {
+    if (data.my_profile) {
         cachedProfile = data.my_profile;
     }
 
@@ -62,41 +74,41 @@ socket.on('user_status', (data) => {
     if (user) {
         user.is_online = (data.status === 'online');
         user.last_active = data.last_active;
-        if(data.gender) user.gender = data.gender;
-        if(currentTab === 'users') renderList();
+        if (data.gender) user.gender = data.gender;
+        if (currentTab === 'users') renderList();
     }
 });
 
 socket.on('profile_updated', (data) => {
     const idx = cachedUsers.findIndex(u => u.id === data.user_id);
     if (idx !== -1) {
-        cachedUsers[idx] = { ...cachedUsers[idx], ...data.user_data };
+        cachedUsers[idx] = {...cachedUsers[idx], ...data.user_data};
     }
 
     if (data.user_id === getMyId()) {
-        cachedProfile = { ...cachedProfile, ...data.user_data };
+        cachedProfile = {...cachedProfile, ...data.user_data};
         updateMyAvatar();
     }
 
     renderList();
 
-    if(document.getElementById('user-info-modal').classList.contains('active')) {
+    if (document.getElementById('user-info-modal').classList.contains('active')) {
         const nameEl = document.getElementById('user-info-name');
-        if(nameEl.innerText === data.user_data.name) {
-             onUserClick(data.user_data);
+        if (nameEl.innerText === data.user_data.name) {
+            onUserClick(data.user_data);
         }
     }
 });
 
 socket.on('user_updated', (data) => {
     const user = cachedUsers.find(u => u.id === data.id);
-    if(user) {
-        if(data.avatar) user.avatar = data.avatar;
-        if(data.avatars_gallery) user.avatars_gallery = data.avatars_gallery;
+    if (user) {
+        if (data.avatar !== undefined) user.avatar = data.avatar;
+        if (data.avatars_gallery) user.avatars_gallery = data.avatars_gallery;
     }
-    if(data.id === getMyId()) {
-        if(data.avatar) cachedProfile.avatar = data.avatar;
-        if(data.avatars_gallery) cachedProfile.avatars_gallery = data.avatars_gallery;
+    if (data.id === getMyId()) {
+        if (data.avatar !== undefined) cachedProfile.avatar = data.avatar;
+        if (data.avatars_gallery) cachedProfile.avatars_gallery = data.avatars_gallery;
         updateMyAvatar();
     }
     renderList();
@@ -105,17 +117,17 @@ socket.on('user_updated', (data) => {
 socket.on('group_updated', (data) => {
     const rooms = Groups.getCachedRooms();
     const room = rooms.find(r => r.id === data.id);
-    if(room) {
-        if(data.name) room.name = data.name;
-        if(data.avatar) room.avatar = data.avatar;
+    if (room) {
+        if (data.name) room.name = data.name;
+        if (data.avatar) room.avatar = data.avatar;
     }
     renderList();
-    if(Groups.getCurrentRoom() === data.id) {
-        if(data.name) document.getElementById('room-name').innerText = data.name;
-        if(data.avatar) {
-             const av = document.getElementById('current-room-avatar');
-             av.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
-             av.style.display = 'block';
+    if (Groups.getCurrentRoom() === data.id) {
+        if (data.name) document.getElementById('room-name').innerText = data.name;
+        if (data.avatar) {
+            const av = document.getElementById('current-room-avatar');
+            av.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
+            av.style.display = 'block';
         }
     }
 });
@@ -123,22 +135,21 @@ socket.on('group_updated', (data) => {
 socket.on('group_update', (data) => {
     const rooms = Groups.getCachedRooms();
     const room = rooms.find(r => r.id === data.room_id);
-    if(room) {
-        if(data.participants) room.participants = data.participants;
-        if(data.name) room.name = data.name;
-        if(data.avatar) room.avatar = data.avatar;
+    if (room) {
+        if (data.participants) room.participants = data.participants;
+        if (data.name) room.name = data.name;
+        if (data.avatar) room.avatar = data.avatar;
     }
 
-    if(Groups.getCurrentRoom() === data.room_id) {
-        if(data.name) document.getElementById('room-name').innerText = data.name;
-        if(data.avatar) {
-             const av = document.getElementById('current-room-avatar');
-             av.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
-             av.style.display = 'block';
+    if (Groups.getCurrentRoom() === data.room_id) {
+        if (data.name) document.getElementById('room-name').innerText = data.name;
+        if (data.avatar) {
+            const av = document.getElementById('current-room-avatar');
+            av.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
+            av.style.display = 'block';
         }
-        if(document.getElementById('group-settings-modal').classList.contains('active')) {
-             // Pass socket here to ensure it's available
-             Groups.openGroupSettings(data.room_id, cachedUsers, socket);
+        if (document.getElementById('group-settings-modal').classList.contains('active')) {
+            Groups.openGroupSettings(data.room_id, cachedUsers, socket);
         }
     }
     renderList();
@@ -150,7 +161,7 @@ socket.on('chat_deleted', (data) => {
     Groups.setCachedRooms(rooms);
     renderList();
 
-    if(Groups.getCurrentRoom() === data.id) {
+    if (Groups.getCurrentRoom() === data.id) {
         Groups.setCurrentRoom(null);
         document.getElementById('room-name').innerText = 'Оберіть чат';
         document.getElementById('messages-area').innerHTML = '';
@@ -158,6 +169,7 @@ socket.on('chat_deleted', (data) => {
         document.getElementById('group-settings-btn').style.display = 'none';
         document.getElementById('call-btn').style.display = 'none';
         document.getElementById('delete-chat-btn').style.display = 'none';
+        document.getElementById('blocked-banner-area').innerHTML = '';
         UI.closeModal('group-settings-modal');
         UI.showNotification('Чат видалено', 'Цей чат було видалено');
     }
@@ -169,7 +181,7 @@ socket.on('force_leave_room', (data) => {
     Groups.setCachedRooms(rooms);
     renderList();
 
-    if(Groups.getCurrentRoom() === data.room_id) {
+    if (Groups.getCurrentRoom() === data.room_id) {
         Groups.setCurrentRoom(null);
         document.getElementById('room-name').innerText = 'Оберіть чат';
         document.getElementById('messages-area').innerHTML = '';
@@ -177,6 +189,7 @@ socket.on('force_leave_room', (data) => {
         document.getElementById('group-settings-btn').style.display = 'none';
         document.getElementById('call-btn').style.display = 'none';
         document.getElementById('delete-chat-btn').style.display = 'none';
+        document.getElementById('blocked-banner-area').innerHTML = '';
         UI.closeModal('group-settings-modal');
     }
 });
@@ -184,11 +197,11 @@ socket.on('force_leave_room', (data) => {
 socket.on('participant_added', (data) => {
     const rooms = Groups.getCachedRooms();
     const room = rooms.find(r => r.id === data.room_id);
-    if(room) {
-        if(!room.participants) room.participants = [];
+    if (room) {
+        if (!room.participants) room.participants = [];
         room.participants.push(data.user);
     }
-    if(document.getElementById('group-settings-modal').classList.contains('active') && Groups.getCurrentRoom() === data.room_id) {
+    if (document.getElementById('group-settings-modal').classList.contains('active') && Groups.getCurrentRoom() === data.room_id) {
         Groups.openGroupSettings(data.room_id, cachedUsers, socket);
     }
 });
@@ -196,10 +209,10 @@ socket.on('participant_added', (data) => {
 socket.on('participant_removed', (data) => {
     const rooms = Groups.getCachedRooms();
     const room = rooms.find(r => r.id === data.room_id);
-    if(room && room.participants) {
+    if (room && room.participants) {
         room.participants = room.participants.filter(p => p.id !== data.user_id);
     }
-    if(document.getElementById('group-settings-modal').classList.contains('active') && Groups.getCurrentRoom() === data.room_id) {
+    if (document.getElementById('group-settings-modal').classList.contains('active') && Groups.getCurrentRoom() === data.room_id) {
         Groups.openGroupSettings(data.room_id, cachedUsers, socket);
     }
 });
@@ -215,20 +228,26 @@ socket.on('new_message', (msg) => {
     }
 
     if (msg.sender_id !== getMyId()) {
-        notificationSound.play().catch(e => {});
+        notificationSound.play().catch(e => {
+        });
         const content = msg.type === 'text' ? decrypt(msg.content) : 'Надіслав файл/голос';
-        UI.showNotification(msg.sender_name, content);
+        UI.showNotification(msg.sender_name, content, () => {
+            const room = rooms.find(r => r.id === msg.room_id);
+            if (room) onRoomClick(room);
+        });
     }
 });
 
 socket.on('reaction_added', (data) => {
-    if(Groups.getCurrentRoom() === data.room_id) {
+    if (Groups.getCurrentRoom() === data.room_id) {
         UI.updateMessageReactions(data.id, data.reactions, socket, data.room_id);
     }
 });
 
 socket.on('notification', (data) => {
-    UI.showNotification(data.title, data.body);
+    UI.showNotification(data.title, data.body, () => {
+        window.switchTab('groups');
+    });
 });
 
 socket.on('message_error', (data) => {
@@ -282,16 +301,22 @@ socket.on('user_disconnected_video', (data) => {
 });
 
 function updateMyAvatar() {
-    if(cachedProfile.avatar) {
-        document.getElementById('my-avatar-small').style.backgroundImage = `url(data:image/png;base64,${cachedProfile.avatar})`;
+    const avatarEl = document.getElementById('my-avatar-small');
+    if (cachedProfile.avatar) {
+        avatarEl.style.backgroundImage = `url(data:image/png;base64,${cachedProfile.avatar})`;
+        avatarEl.innerText = '';
+    } else {
+        avatarEl.style.backgroundImage = '';
+        avatarEl.innerText = getMyName()[0].toUpperCase();
     }
 }
 
 function renderList() {
+    window.renderList = renderList;
     if (currentTab === 'groups') {
         UI.renderRoomList(Groups.getCachedRooms(), Groups.getCurrentRoom(), onRoomClick);
     } else {
-        UI.renderUserList(cachedUsers, onUserClick);
+        UI.renderUserList(cachedUsers, onUserClick, cachedProfile.blocked_users);
     }
 }
 
@@ -300,52 +325,99 @@ function onRoomClick(room) {
     document.getElementById('room-name').innerText = room.name || 'Чат';
 
     const avatarEl = document.getElementById('current-room-avatar');
-    if(room.avatar) {
+    if (room.avatar) {
         avatarEl.style.backgroundImage = `url(data:image/png;base64,${room.avatar})`;
         avatarEl.style.display = 'block';
     } else {
         avatarEl.style.display = 'none';
     }
 
-    const isCreator = (room.type === 'group' && room.created_by === getMyId());
     document.getElementById('group-settings-btn').style.display = (room.type === 'group') ? 'block' : 'none';
     document.getElementById('call-btn').style.display = 'block';
     document.getElementById('delete-chat-btn').style.display = (room.type === 'private') ? 'block' : 'none';
+
+    document.getElementById('blocked-banner-area').innerHTML = '';
+
+    if (room.type === 'private') {
+        const otherUser = room.participants.find(p => p.id !== getMyId());
+        if (otherUser) {
+            const isBlocked = cachedProfile.blocked_users.includes(otherUser.id);
+            const userObj = cachedUsers.find(u => u.id === otherUser.id);
+            const isScrubbed = userObj && !userObj.avatar && !userObj.is_online && !userObj.bio;
+
+            if (isBlocked) {
+                document.getElementById('blocked-banner-area').innerHTML = `
+                    <div class="blocked-banner">
+                        Користувач заблокований
+                        <button onclick="unblockUser('${otherUser.id}')">Розблокувати</button>
+                    </div>
+                `;
+            }
+        }
+    }
 
     renderList();
     socket.emit('join_chat', {room_id: room.id, token: getAccessToken()});
 }
 
+window.unblockUser = async (uid) => {
+    if (confirm('Розблокувати?')) {
+        await fetchWithAuth('/api/user/block', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({target_id: uid, action: 'unblock'})
+        });
+        cachedProfile.blocked_users = cachedProfile.blocked_users.filter(id => id !== uid);
+
+        socket.emit('get_data', {token: getAccessToken()});
+
+        const currentRoom = Groups.getCurrentRoom();
+        if (currentRoom) {
+            document.getElementById('blocked-banner-area').innerHTML = '';
+        }
+    }
+};
+
 function onUserClick(user) {
     document.getElementById('user-info-modal').classList.add('active');
+
+    const iBlocked = cachedProfile.blocked_users.includes(user.id);
+    const isScrubbed = !user.avatar && !user.is_online && !user.bio && !user.real_name && user.name !== 'Unknown';
+    const isBlockedAny = iBlocked || isScrubbed;
+
     document.getElementById('user-info-name').innerText = user.name;
     const bigAv = document.getElementById('user-info-avatar-big');
-    bigAv.style.backgroundImage = user.avatar ? `url(data:image/png;base64,${user.avatar})` : '';
 
-    if(user.real_name) {
-        document.getElementById('user-info-realname').innerText = user.real_name;
-        document.getElementById('user-info-birth').innerText = user.birth_date;
-        document.getElementById('user-info-age').innerText = user.age ? `${user.age} років` : '';
-    } else {
-        document.getElementById('user-info-realname').innerText = 'Інформація прихована';
+    if (isBlockedAny) {
+        bigAv.style.backgroundImage = '';
+        document.getElementById('user-info-realname').innerText = 'Інформація недоступна';
         document.getElementById('user-info-birth').innerText = '';
         document.getElementById('user-info-age').innerText = '';
+        document.getElementById('user-info-bio').innerText = '';
+        UI.renderReadOnlyGallery([]);
+    } else {
+        bigAv.style.backgroundImage = user.avatar ? `url(data:image/png;base64,${user.avatar})` : '';
+        if (user.real_name) {
+            document.getElementById('user-info-realname').innerText = user.real_name;
+            document.getElementById('user-info-birth').innerText = user.birth_date;
+            document.getElementById('user-info-age').innerText = user.age ? `${user.age} років` : '';
+        } else {
+            document.getElementById('user-info-realname').innerText = 'Інформація прихована';
+            document.getElementById('user-info-birth').innerText = '';
+            document.getElementById('user-info-age').innerText = '';
+        }
+        document.getElementById('user-info-bio').innerText = user.bio || 'Немає інформації';
+        UI.renderReadOnlyGallery(user.avatars_gallery || []);
     }
-
-    const bioText = user.bio || 'Немає інформації';
-    document.getElementById('user-info-bio').innerText = bioText;
-
-    UI.renderReadOnlyGallery(user.avatars_gallery || []);
 
     const startBtn = document.getElementById('start-chat-btn');
     startBtn.onclick = () => {
         UI.closeModal('user-info-modal');
-        socket.emit('start_private_chat', { token: getAccessToken(), target_id: user.id });
+        socket.emit('start_private_chat', {token: getAccessToken(), target_id: user.id});
     };
 
-    const isBlocked = cachedProfile.blocked_users.includes(user.id);
     let blockBtn = document.getElementById('block-user-btn');
-    if(!blockBtn) {
+    if (!blockBtn) {
         blockBtn = document.createElement('button');
         blockBtn.id = 'block-user-btn';
         blockBtn.className = 'btn-secondary';
@@ -353,26 +425,32 @@ function onUserClick(user) {
         startBtn.parentNode.insertBefore(blockBtn, startBtn);
     }
 
-    blockBtn.innerText = isBlocked ? 'Розблокувати' : 'Заблокувати';
-    blockBtn.style.color = isBlocked ? 'green' : 'red';
+    blockBtn.innerText = iBlocked ? 'Розблокувати' : 'Заблокувати';
+    blockBtn.style.color = iBlocked ? 'green' : 'red';
 
     blockBtn.onclick = async () => {
-        const action = isBlocked ? 'unblock' : 'block';
-        if(confirm(isBlocked ? 'Розблокувати?' : 'Заблокувати цього користувача?')) {
+        const action = iBlocked ? 'unblock' : 'block';
+        if (confirm(iBlocked ? 'Розблокувати?' : 'Заблокувати цього користувача?')) {
             await fetchWithAuth('/api/user/block', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({target_id: user.id, action})
             });
-            if(isBlocked) {
-                cachedProfile.blocked_users = cachedProfile.blocked_users.filter(id => id !== user.id);
-            } else {
-                cachedProfile.blocked_users.push(user.id);
-            }
-            onUserClick(user);
+
+            socket.emit('get_data', {token: getAccessToken()});
+            UI.closeModal('user-info-modal');
         }
     };
 }
+
+window.openUserProfile = (userId) => {
+    if (userId === getMyId()) {
+        window.openProfileModal();
+        return;
+    }
+    const user = cachedUsers.find(u => u.id === userId);
+    if (user) onUserClick(user);
+};
 
 async function onAvatarSelect(avatarData) {
     document.getElementById('profile-avatar-big').style.backgroundImage = `url(data:image/png;base64,${avatarData})`;
@@ -386,22 +464,25 @@ async function onAvatarSelect(avatarData) {
 }
 
 async function onDeleteAvatar(avatarData) {
-    if(!confirm('Видалити це фото?')) return;
+    if (!confirm('Видалити це фото?')) return;
     const res = await fetchWithAuth('/api/user/avatar/delete', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({avatar: avatarData})
     });
     const data = await res.json();
-    if(data.status === 'ok') {
+    if (data.status === 'ok') {
         cachedProfile.avatars_gallery = data.gallery;
         cachedProfile.avatar = data.avatar;
         UI.renderProfileGallery(cachedProfile.avatars_gallery, cachedProfile.avatar, onAvatarSelect, onDeleteAvatar);
-        if(cachedProfile.avatar) {
-             document.getElementById('profile-avatar-big').style.backgroundImage = `url(data:image/png;base64,${cachedProfile.avatar})`;
+
+        const bigAv = document.getElementById('profile-avatar-big');
+        if (cachedProfile.avatar) {
+            bigAv.style.backgroundImage = `url(data:image/png;base64,${cachedProfile.avatar})`;
         } else {
-             document.getElementById('profile-avatar-big').style.backgroundImage = '';
+            bigAv.style.backgroundImage = '';
         }
+        updateMyAvatar();
     }
 }
 
@@ -430,35 +511,58 @@ window.openProfileModal = () => {
     document.getElementById('profile-birthdate').value = cachedProfile.birth_date || '';
     document.getElementById('profile-gender').value = cachedProfile.gender || 'male';
 
-    if(cachedProfile.age) {
+    if (cachedProfile.age) {
         document.getElementById('my-profile-age').innerText = `${cachedProfile.age} років`;
     } else {
         document.getElementById('my-profile-age').innerText = '';
     }
 
-    if(cachedProfile.avatar) {
+    if (cachedProfile.avatar) {
         document.getElementById('profile-avatar-big').style.backgroundImage = `url(data:image/png;base64,${cachedProfile.avatar})`;
+    } else {
+        document.getElementById('profile-avatar-big').style.backgroundImage = '';
     }
     UI.renderProfileGallery(cachedProfile.avatars_gallery, cachedProfile.avatar, onAvatarSelect, onDeleteAvatar);
 };
 
 window.handleAvatarUpload = () => Media.handleAvatarUpload((data) => {
-    if(data.status === 'ok') {
+    if (data.status === 'ok') {
         cachedProfile.avatars_gallery = data.gallery;
         cachedProfile.avatar = data.avatar;
 
         const bigAv = document.getElementById('profile-avatar-big');
-        if(bigAv) bigAv.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
+        if (bigAv) bigAv.style.backgroundImage = `url(data:image/png;base64,${data.avatar})`;
 
         UI.renderProfileGallery(data.gallery, data.avatar, onAvatarSelect, onDeleteAvatar);
         updateMyAvatar();
     }
 });
 
+function parseDate(input) {
+    if (!input) return '';
+    if (input.match(/^\d{4}-\d{2}-\d{2}$/)) return input;
+
+    let parts = input.split('.');
+    if (parts.length === 2) {
+        let d = parts[0].padStart(2, '0');
+        let m = parts[1].padStart(2, '0');
+        return `2000-${m}-${d}`;
+    }
+    if (parts.length === 3) {
+        let d = parts[0].padStart(2, '0');
+        let m = parts[1].padStart(2, '0');
+        let y = parts[2];
+        if (y.length === 2) y = '20' + y;
+        return `${y}-${m}-${d}`;
+    }
+    return input;
+}
+
 window.saveProfile = async () => {
     const bio = document.getElementById('profile-bio').value;
     const real_name = document.getElementById('profile-realname').value;
-    const birth_date = document.getElementById('profile-birthdate').value;
+    let birth_date_raw = document.getElementById('profile-birthdate').value;
+    const birth_date = parseDate(birth_date_raw);
     const gender = document.getElementById('profile-gender').value;
 
     socket.emit('update_profile', {
@@ -488,6 +592,6 @@ window.closeVideoCall = () => Media.closeVideoCall(socket, Groups.getCurrentRoom
 window.openDeleteChatModal = Groups.openDeleteChatModal;
 window.confirmDeleteChat = () => Groups.confirmDeleteChat(Groups.getCurrentRoom());
 
-document.getElementById('msg-input').addEventListener('keypress', function(e) {
+document.getElementById('msg-input').addEventListener('keypress', function (e) {
     if (e.key === 'Enter') window.sendMessage();
 });

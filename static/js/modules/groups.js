@@ -1,4 +1,4 @@
-import { fetchWithAuth, getMyId, getAccessToken } from '../api.js';
+import {fetchWithAuth, getMyId, getAccessToken} from '../api.js';
 import * as UI from '../ui.js';
 
 let cachedRooms = [];
@@ -32,13 +32,13 @@ export function createGroup(socket) {
     const name = document.getElementById('new-group-name').value;
     const checkboxes = document.querySelectorAll('#user-select-list input:checked');
     const members = Array.from(checkboxes).map(cb => cb.value);
-    if(!name || members.length === 0) return alert('Вкажіть назву та учасників');
-    socket.emit('create_group', { token: getAccessToken(), name, members });
+    if (!name || members.length === 0) return alert('Вкажіть назву та учасників');
+    socket.emit('create_group', {token: getAccessToken(), name, members});
 }
 
 export async function openGroupSettings(roomId, cachedUsers, socket) {
     const room = cachedRooms.find(r => r.id === roomId);
-    if(!room) return;
+    if (!room) return;
 
     const myId = getMyId();
     const me = room.participants.find(p => p.id === myId);
@@ -76,7 +76,7 @@ export async function openGroupSettings(roomId, cachedUsers, socket) {
         isOwner ? (uid) => demoteAdmin(roomId, uid, socket) : null
     );
 
-    if(canEdit) {
+    if (canEdit) {
         setupParticipantSelect(cachedUsers, room.participants);
         loadGroupLogs(roomId);
     }
@@ -98,7 +98,7 @@ export async function loadGroupLogs(roomId) {
         body: JSON.stringify({room_id: roomId})
     });
     const logsData = await logsRes.json();
-    if(logsData.status === 'ok') {
+    if (logsData.status === 'ok') {
         const logContainer = document.getElementById('group-logs');
         logContainer.innerHTML = logsData.logs.map(l => `
             <div class="group-log-item">
@@ -117,21 +117,25 @@ export function showGroupTab(tabName) {
 
 export function handleGroupAvatarUpload(roomId) {
     const file = document.getElementById('group-avatar-input').files[0];
-    if(!file) return;
-
-    UI.closeModal('group-settings-modal');
+    if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (e) => {
         UI.initCropper(e.target.result, async (base64) => {
-             await fetchWithAuth('/api/group/update', {
+            document.getElementById('group-settings-avatar').style.backgroundImage = `url(data:image/png;base64,${base64})`;
+
+            await fetchWithAuth('/api/group/update', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({room_id: roomId, image: base64})
             });
-            // We use window.socket or assume a refresh will happen via socket events
-            // but usually avatar upload is via API, so we just wait for update.
-            // Re-opening might need socket, let's grab it from window if not passed
+
+            const room = cachedRooms.find(r => r.id === roomId);
+            if (room) {
+                room.avatar = base64;
+                if (window.renderList) window.renderList();
+            }
+
             openGroupSettings(roomId, [], window.socket);
         });
     };
@@ -141,42 +145,42 @@ export function handleGroupAvatarUpload(roomId) {
 
 export function updateGroupInfo(roomId, socket) {
     const name = document.getElementById('group-settings-name').value;
-    socket.emit('update_group_settings', { room_id: roomId, name: name, token: getAccessToken() });
+    socket.emit('update_group_settings', {room_id: roomId, name: name, token: getAccessToken()});
     UI.closeModal('group-settings-modal');
 }
 
 export function deleteGroup(roomId, socket) {
-    if(!confirm('Видалити групу?')) return;
-    socket.emit('delete_group', { room_id: roomId, token: getAccessToken() });
+    if (!confirm('Видалити групу?')) return;
+    socket.emit('delete_group', {room_id: roomId, token: getAccessToken()});
     UI.closeModal('group-settings-modal');
 }
 
 export function leaveGroup(roomId, socket) {
-    if(!confirm('Покинути групу?')) return;
-    socket.emit('leave_group', { room_id: roomId, token: getAccessToken() });
+    if (!confirm('Покинути групу?')) return;
+    socket.emit('leave_group', {room_id: roomId, token: getAccessToken()});
     UI.closeModal('group-settings-modal');
 }
 
 export function addParticipant(roomId, socket) {
     const targetId = document.getElementById('new-participant-select').value;
-    if(!targetId) return;
-    socket.emit('add_group_participant', { room_id: roomId, target_id: targetId, token: getAccessToken() });
+    if (!targetId) return;
+    socket.emit('add_group_participant', {room_id: roomId, target_id: targetId, token: getAccessToken()});
 }
 
 export function removeParticipant(roomId, uid, socket) {
-    if(!confirm('Видалити користувача?')) return;
-    socket.emit('remove_group_participant', { room_id: roomId, target_id: uid, token: getAccessToken() });
+    if (!confirm('Видалити користувача?')) return;
+    socket.emit('remove_group_participant', {room_id: roomId, target_id: uid, token: getAccessToken()});
 }
 
 export function promoteAdmin(roomId, uid, socket) {
-    if(confirm('Зробити цього користувача адміністратором?')) {
-        socket.emit('promote_admin', { room_id: roomId, target_id: uid, token: getAccessToken() });
+    if (confirm('Зробити цього користувача адміністратором?')) {
+        socket.emit('promote_admin', {room_id: roomId, target_id: uid, token: getAccessToken()});
     }
 }
 
 export function demoteAdmin(roomId, uid, socket) {
-    if(confirm('Забрати права адміністратора?')) {
-        socket.emit('demote_admin', { room_id: roomId, target_id: uid, token: getAccessToken() });
+    if (confirm('Забрати права адміністратора?')) {
+        socket.emit('demote_admin', {room_id: roomId, target_id: uid, token: getAccessToken()});
     }
 }
 

@@ -33,6 +33,7 @@
     </aside>
 
     <main class="chat-main">
+        <div id="blocked-banner-area"></div>
         <div class="chat-header" id="chat-header">
             <div style="display:flex; align-items:center;">
                 <div id="current-room-avatar" class="avatar" style="margin-right:15px; display:none;"></div>
@@ -114,8 +115,12 @@
 
         <div style="display:flex; gap:10px;">
             <div style="flex:1;">
-                <label style="display:block; font-size:0.9rem;">Дата народження:</label>
-                <input type="date" id="profile-birthdate">
+                <label style="display:block; font-size:0.9rem;">Дата народження (DD.MM.YYYY):</label>
+                <div class="date-input-wrapper">
+                    <input type="text" id="profile-birthdate" placeholder="YYYY-MM-DD або DD.MM">
+                    <input type="date" id="profile-birthdate-picker" style="width: 40px; padding: 0.5rem;"
+                           title="Обрати в календарі">
+                </div>
             </div>
             <div style="flex:1;">
                 <label style="display:block; font-size:0.9rem;">Стать:</label>

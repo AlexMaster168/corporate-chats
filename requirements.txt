@@ -3,3 +3,6 @@ flask-socketio==5.3.6
 flask-jwt-extended==4.5.3
 simple-websocket==1.0.0
 werkzeug==3.0.1
+psycopg==3.3.2
+psycopg-binary==3.3.2
+python-dotenv==1.2.1
